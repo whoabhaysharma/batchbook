@@ -1,15 +1,22 @@
-import { collection, query, getDocs, doc, getDoc, orderBy, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, query, getDocs, doc, getDoc, orderBy, addDoc, serverTimestamp, where } from "firebase/firestore";
 import { getFirebaseDb } from "./firebase";
-import { Student } from "../types/student";
+import { Student, CreateStudentInput } from "../types/student";
+import { Batch, CreateBatchInput } from "../types/batch";
+import { SubjectEnrollment, CreateEnrollmentInput } from "../types/enrollment";
 
-export interface Batch {
-  id: string;
-  name: string;
-  students: number;
-  time: string;
-  status: string;
-  color: string;
+
+export async function getEnrollmentsByStudentId(studentId: string): Promise<SubjectEnrollment[]> {
+  const db = getFirebaseDb();
+  const q = query(
+    collection(db, "subject_enrollments"), 
+    where("studentId", "==", studentId),
+    where("status", "==", "active")
+  );
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SubjectEnrollment));
 }
+
+
 
 export async function getBatches(): Promise<Batch[]> {
   const db = getFirebaseDb();
@@ -35,20 +42,30 @@ export async function getStudentById(id: string): Promise<Student | null> {
   return null;
 }
 
-export async function createBatch(batch: Omit<Batch, "id">): Promise<string> {
+export async function createBatch(batch: CreateBatchInput): Promise<string> {
   const db = getFirebaseDb();
   const docRef = await addDoc(collection(db, "batches"), {
     ...batch,
+    students: 0,
     createdAt: serverTimestamp(),
   });
   return docRef.id;
 }
 
-export async function createStudent(student: Omit<Student, "id">): Promise<string> {
+export async function createStudent(student: CreateStudentInput): Promise<string> {
   const db = getFirebaseDb();
   const docRef = await addDoc(collection(db, "students"), {
     ...student,
     createdAt: serverTimestamp(),
+  });
+  return docRef.id;
+}
+
+export async function createEnrollment(enrollment: CreateEnrollmentInput): Promise<string> {
+  const db = getFirebaseDb();
+  const docRef = await addDoc(collection(db, "subject_enrollments"), {
+    ...enrollment,
+    enrolledAt: serverTimestamp(),
   });
   return docRef.id;
 }

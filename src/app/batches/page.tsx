@@ -13,7 +13,12 @@ import {
 } from "@/components/ui/drawer";
 import { Plus, LayoutGrid, X } from "lucide-react";
 import { IconPlus, IconCalendar, IconUsers } from "@/components/icons/dashboard-icons";
-import { getBatches, createBatch, type Batch } from "@/lib/db";
+import { getBatches, createBatch } from "@/lib/db";
+import { type Batch } from "@/types/batch";
+import { cn } from "@/lib/utils";
+import { APP_CONFIG } from "@/lib/config";
+
+
 
 
 export default function BatchesPage() {
@@ -41,10 +46,11 @@ export default function BatchesPage() {
       await createBatch({
         name: newBatchName,
         time: newBatchTime,
-        students: 0,
-        status: "ACTIVE",
-        color: "from-emerald-500/20",
+        status: "active",
+        tuitionId: APP_CONFIG.DEFAULT_TUITION_ID,
       });
+
+
       setNewBatchName("");
       setNewBatchTime("");
       await fetchBatches();
@@ -120,8 +126,7 @@ export default function BatchesPage() {
       <div className="px-8">
         <div className="flex items-center gap-4 rounded-2xl bg-[#111111] border border-white/5 p-1">
            <button className="flex-1 h-10 rounded-xl bg-[#1a1a1a] text-[11px] font-black uppercase tracking-widest text-white">Active</button>
-           <button className="flex-1 h-10 rounded-xl text-[11px] font-black uppercase tracking-widest text-[#444444]">Completed</button>
-           <button className="flex-1 h-10 rounded-xl text-[11px] font-black uppercase tracking-widest text-[#444444]">Archived</button>
+           <button className="flex-1 h-10 rounded-xl text-[11px] font-black uppercase tracking-widest text-[#444444]">Inactive</button>
         </div>
       </div>
 
@@ -135,15 +140,19 @@ export default function BatchesPage() {
           <div key={i} className="card-cred p-8 flex flex-col gap-6 group active:scale-[0.98] transition-all relative overflow-hidden">
             <div className="flex items-start justify-between relative z-10">
               <div className="flex flex-col gap-1">
-                <span className="text-[10px] font-black tracking-[0.2em] text-[#444444]">{batch.id}</span>
+                <span className="text-[10px] font-black tracking-[0.2em] text-[#444444]">#{batch.id.slice(0, 6).toUpperCase()}</span>
                 <h3 className="text-2xl font-black text-white tracking-tight group-active:text-[var(--app-accent)] transition-colors">
                   {batch.name}
                 </h3>
               </div>
-              <div className={`text-[10px] font-black tracking-widest px-3 py-1 rounded-full bg-black/40 border border-white/5 ${batch.color || "text-[var(--app-accent)]"}`}>
+              <div className={cn(
+                "text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-black/40 border border-white/5",
+                batch.status === "active" ? "text-[var(--app-accent)]" : "text-[#444444]"
+              )}>
                 {batch.status}
               </div>
             </div>
+
 
             <div className="flex items-center gap-8 relative z-10">
               <div className="flex items-center gap-2">
@@ -157,7 +166,7 @@ export default function BatchesPage() {
             </div>
 
             {/* Subtle background glow for active batches */}
-            {batch.status === "ACTIVE" && (
+            {batch.status === "active" && (
                <div className="absolute -right-12 -top-12 h-24 w-24 bg-[var(--app-accent)] opacity-[0.03] blur-3xl pointer-events-none" />
             )}
           </div>

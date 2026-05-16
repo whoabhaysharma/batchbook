@@ -1,19 +1,13 @@
 /**
- * Application Defaults
- * These are fallback values. Real tuition data is fetched from Firestore.
+ * Global configuration and mock data for development.
+ * TODO: Replace with dynamic Auth Context/Environment variables.
  */
-export const DEFAULT_APP_NAME = "BatchBook";
 
-/**
- * Generates a basic abbreviation from a name.
- * Real abbreviations are stored in the 'tuitions' collection.
- */
-export function generateBasicAbbreviation(name: string): string {
-  return name
-    .split(/(?=[A-Z])|\s|_/)
-    .map(word => word.trim()[0])
-    .filter(Boolean)
-    .join("")
-    .toUpperCase()
-    .substring(0, 3);
-}
+export const APP_CONFIG = {
+  DEFAULT_APP_NAME: "BatchBook",
+  DEFAULT_TUITION_ID: "TUIT001",
+  MOCK_OWNER_ID: "USER_OWNER_001",
+};
+
+export const DEFAULT_APP_NAME = APP_CONFIG.DEFAULT_APP_NAME;
+

@@ -5,16 +5,20 @@ export interface Student {
   name: string;
   batch: string;
   tuitionId: string; // Linked tuition
-  status: "PAID" | "UNPAID";
+  status: "active" | "inactive" | "on-hold";
   avatar?: string;
   email?: string;
   phone?: string;
   guardianName?: string;
   guardianPhone?: string;
-  subjects: string[];
-  fee: number;
+  billingDay: number;
+  remarks?: string;
   createdAt: number;
 }
 
 
-export type CreateStudentInput = Omit<Student, "id" | "rollNumber" | "rollSeq" | "createdAt" | "avatar">;
+
+
+
+export type CreateStudentInput = Omit<Student, "id" | "rollNumber" | "rollSeq" | "createdAt">;
+
