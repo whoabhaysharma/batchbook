@@ -1,4 +1,4 @@
-import { collection, query, getDocs, doc, getDoc, orderBy, limit } from "firebase/firestore";
+import { collection, query, getDocs, doc, getDoc, orderBy, addDoc, serverTimestamp } from "firebase/firestore";
 import { getFirebaseDb } from "./firebase";
 import { Student } from "../types/student";
 
@@ -13,14 +13,13 @@ export interface Batch {
 
 export async function getBatches(): Promise<Batch[]> {
   const db = getFirebaseDb();
-  const q = query(collection(db, "batches"));
+  const q = query(collection(db, "batches"), orderBy("createdAt", "desc"));
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Batch));
 }
 
 export async function getStudents(): Promise<Student[]> {
   const db = getFirebaseDb();
-  // Order by createdAt to see newest first
   const q = query(collection(db, "students"), orderBy("createdAt", "desc"));
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
@@ -35,3 +34,22 @@ export async function getStudentById(id: string): Promise<Student | null> {
   }
   return null;
 }
+
+export async function createBatch(batch: Omit<Batch, "id">): Promise<string> {
+  const db = getFirebaseDb();
+  const docRef = await addDoc(collection(db, "batches"), {
+    ...batch,
+    createdAt: serverTimestamp(),
+  });
+  return docRef.id;
+}
+
+export async function createStudent(student: Omit<Student, "id">): Promise<string> {
+  const db = getFirebaseDb();
+  const docRef = await addDoc(collection(db, "students"), {
+    ...student,
+    createdAt: serverTimestamp(),
+  });
+  return docRef.id;
+}
+

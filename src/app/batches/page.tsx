@@ -1,20 +1,59 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Metadata } from "next";
+import { 
+  Drawer, 
+  DrawerContent, 
+  DrawerHeader, 
+  DrawerTitle, 
+  DrawerDescription, 
+  DrawerTrigger,
+  DrawerFooter,
+  DrawerClose
+} from "@/components/ui/drawer";
+import { Plus, LayoutGrid, X } from "lucide-react";
 import { IconPlus, IconCalendar, IconUsers } from "@/components/icons/dashboard-icons";
-import { getBatches, type Batch } from "@/lib/db";
+import { getBatches, createBatch, type Batch } from "@/lib/db";
+
 
 export default function BatchesPage() {
   const [batches, setBatches] = useState<Batch[]>([]);
   const [loading, setLoading] = useState(true);
+  const [newBatchName, setNewBatchName] = useState("");
+  const [newBatchTime, setNewBatchTime] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const fetchBatches = async () => {
+    setLoading(true);
+    const data = await getBatches();
+    setBatches(data);
+    setLoading(false);
+  };
 
   useEffect(() => {
-    getBatches().then((data) => {
-      setBatches(data);
-      setLoading(false);
-    });
+    fetchBatches();
   }, []);
+
+  const handleCreateBatch = async () => {
+    if (!newBatchName || !newBatchTime) return;
+    setIsSubmitting(true);
+    try {
+      await createBatch({
+        name: newBatchName,
+        time: newBatchTime,
+        students: 0,
+        status: "ACTIVE",
+        color: "from-emerald-500/20",
+      });
+      setNewBatchName("");
+      setNewBatchTime("");
+      await fetchBatches();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-10 pb-28">
@@ -28,10 +67,54 @@ export default function BatchesPage() {
             Batches
           </h1>
         </div>
-        <button className="h-14 w-14 rounded-2xl bg-[#0d0d0d] border border-white/5 shadow-[neu-raised] flex items-center justify-center text-[var(--app-accent)] active:shadow-[neu-pressed] transition-all">
-          <IconPlus className="h-7 w-7" />
-        </button>
+        
+        <Drawer>
+          <DrawerTrigger asChild>
+            <button className="h-14 w-14 rounded-2xl bg-[#0d0d0d] border border-white/5 shadow-[neu-raised] flex items-center justify-center text-[var(--app-accent)] active:shadow-[neu-pressed] transition-all">
+              <IconPlus className="h-7 w-7" />
+            </button>
+          </DrawerTrigger>
+          <DrawerContent>
+            <DrawerHeader>
+              <DrawerTitle>Initialize Batch</DrawerTitle>
+              <DrawerDescription>Define a new learning orbit</DrawerDescription>
+            </DrawerHeader>
+            <div className="px-10 flex flex-col gap-8 pb-10">
+               <div className="flex flex-col gap-2">
+                 <label className="text-[10px] font-black uppercase tracking-[0.3em] text-[#444444] px-1">Batch Name</label>
+                 <input 
+                   type="text" 
+                   value={newBatchName}
+                   onChange={(e) => setNewBatchName(e.target.value)}
+                   className="h-16 w-full rounded-2xl bg-[#0d0d0d] border border-white/5 shadow-[neu-pressed] px-6 text-[16px] font-bold text-white outline-none focus:border-[var(--app-accent)]/20 transition-all"
+                   placeholder="e.g. Morning STEM"
+                 />
+               </div>
+               <div className="flex flex-col gap-2">
+                 <label className="text-[10px] font-black uppercase tracking-[0.3em] text-[#444444] px-1">Default Timing</label>
+                 <input 
+                   type="text" 
+                   value={newBatchTime}
+                   onChange={(e) => setNewBatchTime(e.target.value)}
+                   className="h-16 w-full rounded-2xl bg-[#0d0d0d] border border-white/5 shadow-[neu-pressed] px-6 text-[16px] font-bold text-white outline-none focus:border-[var(--app-accent)]/20 transition-all"
+                   placeholder="e.g. 08:00 AM - 10:00 AM"
+                 />
+               </div>
+               <DrawerClose asChild>
+                 <button 
+                   onClick={handleCreateBatch}
+                   disabled={isSubmitting || !newBatchName || !newBatchTime}
+                   className="h-16 w-full btn-neon text-[13px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-30"
+                 >
+                    {isSubmitting ? "Syncing..." : "Launch Batch"}
+                    <LayoutGrid className="h-5 w-5" />
+                 </button>
+               </DrawerClose>
+            </div>
+          </DrawerContent>
+        </Drawer>
       </header>
+
 
       {/* 2. Batch Search / Filter (Minimalist) */}
       <div className="px-8">

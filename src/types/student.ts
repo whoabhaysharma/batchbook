@@ -11,7 +11,10 @@ export interface Student {
   phone?: string;
   guardianName?: string;
   guardianPhone?: string;
+  subjects: string[];
+  fee: number;
   createdAt: number;
 }
+
 
 export type CreateStudentInput = Omit<Student, "id" | "rollNumber" | "rollSeq" | "createdAt" | "avatar">;

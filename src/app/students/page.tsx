@@ -3,19 +3,94 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { IconPlus, IconUsers, IconSearch } from "@/components/icons/dashboard-icons";
-import { getStudents } from "@/lib/db";
+import { 
+  Drawer, 
+  DrawerContent, 
+  DrawerHeader, 
+  DrawerTitle, 
+  DrawerDescription, 
+  DrawerTrigger,
+  DrawerFooter,
+  DrawerClose
+} from "@/components/ui/drawer";
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Plus, UserPlus, X, ChevronDown } from "lucide-react";
+import { getStudents, createStudent, getBatches, type Batch } from "@/lib/db";
 import { type Student } from "@/types/student";
+import { cn } from "@/lib/utils";
+
+
 
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
+  const [batches, setBatches] = useState<Batch[]>([]);
   const [loading, setLoading] = useState(true);
+  const [newStudentName, setNewStudentName] = useState("");
+  const [newStudentBatch, setNewStudentBatch] = useState("");
+  const [selectedSubjects, setSelectedSubjects] = useState<{name: string, price: number}[]>([]);
+  const [customSubjectName, setCustomSubjectName] = useState("");
+  const [customSubjectPrice, setCustomSubjectPrice] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const totalFee = selectedSubjects.reduce((acc, s) => acc + s.price, 0);
+
+  const addCustomSubject = () => {
+    if (!customSubjectName || !customSubjectPrice) return;
+    setSelectedSubjects([...selectedSubjects, { 
+      name: customSubjectName, 
+      price: Number(customSubjectPrice) 
+    }]);
+    setCustomSubjectName("");
+    setCustomSubjectPrice("");
+  };
+
+  const removeSubject = (index: number) => {
+    setSelectedSubjects(selectedSubjects.filter((_, i) => i !== index));
+  };
+
+  const fetchData = async () => {
+    setLoading(true);
+    const [studentData, batchData] = await Promise.all([
+      getStudents(),
+      getBatches()
+    ]);
+    setStudents(studentData);
+    setBatches(batchData);
+    setLoading(false);
+  };
 
   useEffect(() => {
-    getStudents().then((data) => {
-      setStudents(data);
-      setLoading(false);
-    });
+    fetchData();
   }, []);
+
+  const handleCreateStudent = async () => {
+    if (!newStudentName || !newStudentBatch || selectedSubjects.length === 0) return;
+    setIsSubmitting(true);
+    try {
+      await createStudent({
+        name: newStudentName,
+        batch: newStudentBatch,
+        subjects: selectedSubjects.map(s => s.name),
+        fee: totalFee,
+        status: "PAID",
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${newStudentName}`,
+      });
+      setNewStudentName("");
+      setNewStudentBatch("");
+      setSelectedSubjects([]);
+      await fetchData();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-10 pb-28">
@@ -29,10 +104,118 @@ export default function StudentsPage() {
             Students
           </h1>
         </div>
-        <button className="h-14 w-14 rounded-2xl bg-[#0d0d0d] border border-white/5 shadow-[neu-raised] flex items-center justify-center text-[var(--app-accent)] active:shadow-[neu-pressed] transition-all">
-          <IconPlus className="h-7 w-7" />
-        </button>
+        
+        <Drawer>
+          <DrawerTrigger asChild>
+            <button className="h-14 w-14 rounded-2xl bg-[#0d0d0d] border border-white/5 shadow-[neu-raised] flex items-center justify-center text-[var(--app-accent)] active:shadow-[neu-pressed] transition-all">
+              <IconPlus className="h-7 w-7" />
+            </button>
+          </DrawerTrigger>
+          <DrawerContent>
+            <DrawerHeader className="pb-2">
+              <DrawerTitle>Onboard Student</DrawerTitle>
+              <DrawerDescription>Secure their spot in your center</DrawerDescription>
+            </DrawerHeader>
+            <div className="flex flex-col overflow-hidden max-h-[85vh]">
+              <div className="px-10 flex flex-col gap-6 pb-6 overflow-y-auto pt-2">
+                 <div className="flex flex-col gap-2">
+                   <label className="text-[10px] font-black uppercase tracking-[0.3em] text-[#444444] px-1">Full Name</label>
+                   <input 
+                     type="text" 
+                     value={newStudentName}
+                     onChange={(e) => setNewStudentName(e.target.value)}
+                     className="h-14 w-full rounded-2xl bg-[#0d0d0d] border border-white/5 shadow-[neu-pressed] px-6 text-[15px] font-bold text-white outline-none focus:border-[var(--app-accent)]/20 transition-all"
+                     placeholder="e.g. Rahul Sharma"
+                   />
+                 </div>
+                 
+                 <div className="flex flex-col gap-2">
+                   <label className="text-[10px] font-black uppercase tracking-[0.3em] text-[#444444] px-1">Batch Assignment</label>
+                   <Select onValueChange={setNewStudentBatch} value={newStudentBatch}>
+                      <SelectTrigger className="h-14">
+                        <SelectValue placeholder="Select a batch" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {batches.map((batch) => (
+                          <SelectItem key={batch.id} value={batch.name}>
+                            {batch.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                   </Select>
+                 </div>
+
+                 <div className="flex flex-col gap-3">
+                   <label className="text-[10px] font-black uppercase tracking-[0.3em] text-[#444444] px-1">Configure Curriculum</label>
+                   
+                   <div className="grid grid-cols-[1fr,80px,56px] gap-2">
+                      <input 
+                        type="text" 
+                        value={customSubjectName}
+                        onChange={(e) => setCustomSubjectName(e.target.value)}
+                        placeholder="Subject Name"
+                        className="h-14 rounded-xl bg-[#111111] border border-white/5 px-4 text-[13px] font-bold text-white outline-none"
+                      />
+                      <input 
+                        type="number" 
+                        value={customSubjectPrice}
+                        onChange={(e) => setCustomSubjectPrice(e.target.value)}
+                        placeholder="Price"
+                        className="h-14 rounded-xl bg-[#111111] border border-white/5 px-4 text-[13px] font-bold text-white outline-none"
+                      />
+                      <button 
+                        onClick={addCustomSubject}
+                        className="h-14 rounded-xl bg-[var(--app-accent-soft)] border border-[var(--app-accent)]/20 flex items-center justify-center text-[var(--app-accent)]"
+                      >
+                        <Plus className="h-5 w-5" />
+                      </button>
+                   </div>
+
+                   <div className="flex flex-col gap-2 mt-2">
+                      {selectedSubjects.map((subject, i) => (
+                        <div key={i} className="flex items-center justify-between p-4 rounded-xl bg-[#0d0d0d] border border-white/5">
+                          <div className="flex flex-col">
+                            <span className="text-[13px] font-bold text-white">{subject.name}</span>
+                            <span className="text-[10px] font-black text-[var(--app-accent)]">₹{subject.price}</span>
+                          </div>
+                          <button onClick={() => removeSubject(i)} className="text-[#333333] hover:text-red-500 transition-colors">
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                   </div>
+                 </div>
+              </div>
+
+              {/* Sticky Footer */}
+              <div className="px-10 py-8 bg-[#0d0d0d] border-t border-white/5 shadow-[0_-20px_40px_rgba(0,0,0,0.4)]">
+                 <DrawerClose asChild>
+                   <button 
+                     onClick={handleCreateStudent}
+                     disabled={isSubmitting || !newStudentName || !newStudentBatch || selectedSubjects.length === 0}
+                     className="h-16 w-full btn-neon text-[13px] font-black uppercase tracking-[0.2em] flex items-center justify-between px-8 active:scale-95 transition-all disabled:opacity-30"
+                   >
+                      <div className="flex items-center gap-3">
+                        {isSubmitting ? "Syncing..." : "Onboard"}
+                        <UserPlus className="h-5 w-5" />
+                      </div>
+
+                      <div className="flex items-center gap-2 pl-4 border-l border-black/10">
+                        <span className="opacity-60 text-[10px]">TOTAL</span>
+                        <span className="text-[16px] tracking-tight">₹{totalFee}</span>
+                      </div>
+                   </button>
+                 </DrawerClose>
+              </div>
+
+            </div>
+
+          </DrawerContent>
+        </Drawer>
       </header>
+
+
+
 
       {/* 2. Neomorphic Search Bar */}
       <div className="px-8 flex flex-col gap-6">

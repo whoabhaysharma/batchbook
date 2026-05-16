@@ -4,14 +4,19 @@ import { db, FieldValue } from "../admin";
 /**
  * Onboarding: Sets up user profile and their tuition center.
  */
-export const setupTuition = functions.https.onCall(async (request) => {
+export const setupTuition = functions.https.onCall({ cors: true }, async (request) => {
+  console.log("🚀 setupTuition called with data:", JSON.stringify(request.data));
+  console.log("👤 Auth context:", request.auth ? `UID: ${request.auth.uid}` : "NO AUTH");
+
   // Check if user is authenticated
   if (!request.auth) {
+    console.warn("❌ Unauthenticated access attempt");
     throw new functions.https.HttpsError(
       "unauthenticated",
       "User must be logged in."
     );
   }
+
 
   const { tuitionName, tuitionCode, userName } = request.data;
   const uid = request.auth.uid;
