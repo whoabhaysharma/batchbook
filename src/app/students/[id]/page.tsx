@@ -1,11 +1,14 @@
 import { IconCalendar, IconCash, IconUsers, IconPlus } from "@/components/icons/dashboard-icons";
 import Link from "next/link";
+import { useAuth } from "@/components/auth-provider";
 
 export default function StudentDetailPage({ params }: { params: { id: string } }) {
+  const { profile } = useAuth();
   // Mock data for the demonstration
   const student = {
     name: "Rahul Sharma",
-    id: params.id || "S-1001",
+    id: params.id,
+    rollNumber: `${profile?.tuitionId ? "ABC" : "BB"}001`,
     batch: "Morning STEM",
     joined: "12 Jan 2026",
     status: "PAID",
@@ -34,7 +37,7 @@ export default function StudentDetailPage({ params }: { params: { id: string } }
         <div className="flex flex-col items-center gap-1">
           <h1 className="text-3xl font-black text-white tracking-tight">{student.name}</h1>
           <p className="text-[11px] font-black uppercase tracking-[0.4em] text-[#444444]">
-            Member ID: {student.id}
+            Roll Number: {student.rollNumber}
           </p>
         </div>
       </header>

@@ -1,6 +1,7 @@
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import { getAuth, connectAuthEmulator, type Auth } from "firebase/auth";
 import { getFirestore, connectFirestoreEmulator, type Firestore } from "firebase/firestore";
+import { getFunctions, connectFunctionsEmulator, type Functions } from "firebase/functions";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBxRDLQFUyUdVNrh1quBXfwyf4kKYjWQgU",
@@ -43,6 +44,14 @@ export function getFirebaseDb(): Firestore {
     }
   }
   return db;
+}
+
+export function getFirebaseFunctions(): Functions {
+  const functions = getFunctions(getFirebaseApp());
+  if (process.env.NODE_ENV === "development") {
+    connectFunctionsEmulator(functions, "localhost", 5001);
+  }
+  return functions;
 }
 
 

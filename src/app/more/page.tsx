@@ -65,7 +65,6 @@ export default function MorePage() {
            <h3 className="text-[11px] font-black uppercase tracking-[0.4em] text-[#333333]">Center Configuration</h3>
            <div className="flex flex-col gap-4">
              {[
-               { label: "General Settings", icon: IconMore, desc: "Name, Logo, and Branding" },
                { label: "Payment Gateway", icon: IconCash, desc: "Manage UPI and Bank details" },
                { label: "Time Slots", icon: IconCalendar, desc: "Configure default batch timings" },
              ].map((item, i) => (

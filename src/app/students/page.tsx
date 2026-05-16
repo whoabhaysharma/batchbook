@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { IconPlus, IconUsers, IconSearch } from "@/components/icons/dashboard-icons";
-import { getStudents, type Student } from "@/lib/db";
+import { getStudents } from "@/lib/db";
+import { type Student } from "@/types/student";
 
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
@@ -87,7 +88,7 @@ export default function StudentsPage() {
                 {student.name}
               </h4>
               <p className="text-[11px] font-bold text-[#444444] uppercase tracking-wider">
-                {student.batch} • {student.id}
+                {student.batch} • {student.rollNumber}
               </p>
             </div>
 

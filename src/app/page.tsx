@@ -5,8 +5,10 @@ import Link from "next/link";
 import { IconSearch, IconCalendar, IconUsers, IconPlus, IconCash } from "@/components/icons/dashboard-icons";
 import { IconMore } from "@/components/icons/tab-icons";
 import { getBatches, type Batch } from "@/lib/db";
+import { useAuth } from "@/components/auth-provider";
 
 export default function HomePage() {
+  const { profile } = useAuth();
   const [batches, setBatches] = useState<Batch[]>([]);
   const today = new Intl.DateTimeFormat("en", {
     weekday: "long",
@@ -24,7 +26,7 @@ export default function HomePage() {
       <header className="flex items-center justify-between px-8 pt-12">
         <div className="flex flex-col gap-1">
           <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#333333]">
-            BATCHBOOK • PREMIER
+            {profile?.name || "BATCHBOOK"} • PREMIER
           </p>
           <h1 className="text-4xl font-extrabold tracking-tighter text-white">
             Home

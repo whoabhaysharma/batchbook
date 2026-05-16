@@ -1,5 +1,6 @@
-import { collection, query, getDocs, doc, getDoc } from "firebase/firestore";
+import { collection, query, getDocs, doc, getDoc, orderBy, limit } from "firebase/firestore";
 import { getFirebaseDb } from "./firebase";
+import { Student } from "../types/student";
 
 export interface Batch {
   id: string;
@@ -8,14 +9,6 @@ export interface Batch {
   time: string;
   status: string;
   color: string;
-}
-
-export interface Student {
-  id: string;
-  name: string;
-  batch: string;
-  status: string;
-  avatar: string;
 }
 
 export async function getBatches(): Promise<Batch[]> {
@@ -27,7 +20,8 @@ export async function getBatches(): Promise<Batch[]> {
 
 export async function getStudents(): Promise<Student[]> {
   const db = getFirebaseDb();
-  const q = query(collection(db, "students"));
+  // Order by createdAt to see newest first
+  const q = query(collection(db, "students"), orderBy("createdAt", "desc"));
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
 }

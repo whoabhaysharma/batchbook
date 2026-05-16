@@ -3,6 +3,7 @@ import { Inter, Outfit } from "next/font/google";
 import { AppFrame } from "@/components/app-frame";
 import { FirebaseAnalytics } from "@/components/firebase-analytics";
 import { AuthProvider } from "@/components/auth-provider";
+import { DEFAULT_APP_NAME } from "@/lib/config";
 
 import "./globals.css";
 
@@ -11,10 +12,10 @@ const outfit = Outfit({ subsets: ["latin"], variable: "--font-outfit" });
 
 export const metadata: Metadata = {
   title: {
-    default: "BatchBook",
-    template: "%s — BatchBook",
+    default: DEFAULT_APP_NAME,
+    template: `%s — ${DEFAULT_APP_NAME}`,
   },
-  description: "BatchBook by Bythub — the professional tuition center management system.",
+  description: `${DEFAULT_APP_NAME} by Bythub — the professional tuition center management system.`,
 };
 
 export const viewport: Viewport = {
