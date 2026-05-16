@@ -1,9 +1,13 @@
 import type { Metadata, Viewport } from "next";
-
+import { Inter, Outfit } from "next/font/google";
 import { AppFrame } from "@/components/app-frame";
 import { FirebaseAnalytics } from "@/components/firebase-analytics";
+import { AuthProvider } from "@/components/auth-provider";
 
 import "./globals.css";
+
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+const outfit = Outfit({ subsets: ["latin"], variable: "--font-outfit" });
 
 export const metadata: Metadata = {
   title: {
@@ -18,9 +22,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   viewportFit: "cover",
-  themeColor: "#f8f9ff",
+  themeColor: "#000000",
 };
-
 
 export default function RootLayout({
   children,
@@ -29,10 +32,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>
+      <body className={`${inter.variable} ${outfit.variable} antialiased`}>
         <FirebaseAnalytics />
-        <AppFrame>{children}</AppFrame>
+        <AuthProvider>
+          <AppFrame>{children}</AppFrame>
+        </AuthProvider>
       </body>
     </html>
   );
 }
+

@@ -1,59 +1,95 @@
-import type { Metadata } from "next";
-import { PageHeader } from "@/components/page-header";
-import { GroupedList, GroupedRow } from "@/components/grouped-list";
-import { IconPlus, IconCalendar } from "@/components/icons/dashboard-icons";
+"use client";
 
-export const metadata: Metadata = {
-  title: "Batches",
-};
+import { useEffect, useState } from "react";
+import type { Metadata } from "next";
+import { IconPlus, IconCalendar, IconUsers } from "@/components/icons/dashboard-icons";
+import { getBatches, type Batch } from "@/lib/db";
 
 export default function BatchesPage() {
-  return (
-    <div className="flex flex-col gap-6 pb-8">
-      <PageHeader 
-        title="Batches" 
-        subtitle="Manage your classes and schedules"
-        trailing={
-          <button className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--app-accent)] text-white shadow-md active:scale-95">
-            <IconPlus className="h-6 w-6" />
-          </button>
-        }
-      />
+  const [batches, setBatches] = useState<Batch[]>([]);
+  const [loading, setLoading] = useState(true);
 
-      <div className="px-5">
-        <div className="card-premium flex flex-col items-center justify-center bg-white p-8 text-center dark:bg-[var(--app-card)]">
-          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20">
-            <IconCalendar className="h-8 w-8" />
-          </div>
-          <p className="text-xl font-bold">No batches found</p>
-          <p className="mt-2 text-[15px] leading-relaxed text-[var(--app-text-muted)]">
-            Start by creating your first batch to manage students and schedules.
+  useEffect(() => {
+    getBatches().then((data) => {
+      setBatches(data);
+      setLoading(false);
+    });
+  }, []);
+
+  return (
+    <div className="flex flex-col gap-10 pb-28">
+      {/* 1. CRED-style Page Header */}
+      <header className="flex items-end justify-between px-8 pt-16">
+        <div className="flex flex-col gap-1">
+          <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#333333]">
+            Administration
           </p>
+          <h1 className="text-4xl font-extrabold tracking-tighter text-white">
+            Batches
+          </h1>
+        </div>
+        <button className="h-14 w-14 rounded-2xl bg-[#0d0d0d] border border-white/5 shadow-[neu-raised] flex items-center justify-center text-[var(--app-accent)] active:shadow-[neu-pressed] transition-all">
+          <IconPlus className="h-7 w-7" />
+        </button>
+      </header>
+
+      {/* 2. Batch Search / Filter (Minimalist) */}
+      <div className="px-8">
+        <div className="flex items-center gap-4 rounded-2xl bg-[#111111] border border-white/5 p-1">
+           <button className="flex-1 h-10 rounded-xl bg-[#1a1a1a] text-[11px] font-black uppercase tracking-widest text-white">Active</button>
+           <button className="flex-1 h-10 rounded-xl text-[11px] font-black uppercase tracking-widest text-[#444444]">Completed</button>
+           <button className="flex-1 h-10 rounded-xl text-[11px] font-black uppercase tracking-widest text-[#444444]">Archived</button>
         </div>
       </div>
 
-      <GroupedList header="Recent Templates">
-        <GroupedRow 
-          icon={<IconCalendar className="h-5 w-5" />} 
-          trailing={<span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[12px] text-indigo-600">Active</span>}
-        >
-          Morning STEM
-        </GroupedRow>
-        <GroupedRow 
-          icon={<IconCalendar className="h-5 w-5" />} 
-          trailing={<span className="rounded-full bg-amber-50 px-2 py-0.5 text-[12px] text-amber-600">Pending</span>}
-        >
-          Weekend Revision
-        </GroupedRow>
-        <GroupedRow 
-          icon={<IconCalendar className="h-5 w-5" />} 
-          trailing={<span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[12px] text-indigo-600">Active</span>}
-          isLast
-        >
-          Evening Language
-        </GroupedRow>
-      </GroupedList>
+      {/* 3. Neomorphic Batch List */}
+      <section className="flex flex-col gap-6 px-8">
+        {loading ? (
+           <div className="card-cred p-10 text-center text-[#444444] font-black uppercase tracking-widest">
+             Loading batches...
+           </div>
+        ) : batches.map((batch, i) => (
+          <div key={i} className="card-cred p-8 flex flex-col gap-6 group active:scale-[0.98] transition-all relative overflow-hidden">
+            <div className="flex items-start justify-between relative z-10">
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-black tracking-[0.2em] text-[#444444]">{batch.id}</span>
+                <h3 className="text-2xl font-black text-white tracking-tight group-active:text-[var(--app-accent)] transition-colors">
+                  {batch.name}
+                </h3>
+              </div>
+              <div className={`text-[10px] font-black tracking-widest px-3 py-1 rounded-full bg-black/40 border border-white/5 ${batch.color || "text-[var(--app-accent)]"}`}>
+                {batch.status}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-8 relative z-10">
+              <div className="flex items-center gap-2">
+                <IconUsers className="h-5 w-5 text-[#333333]" />
+                <span className="text-[13px] font-bold text-[#666666]">{batch.students} Members</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <IconCalendar className="h-5 w-5 text-[#333333]" />
+                <span className="text-[13px] font-bold text-[#666666]">{batch.time || "Flexible"}</span>
+              </div>
+            </div>
+
+            {/* Subtle background glow for active batches */}
+            {batch.status === "ACTIVE" && (
+               <div className="absolute -right-12 -top-12 h-24 w-24 bg-[var(--app-accent)] opacity-[0.03] blur-3xl pointer-events-none" />
+            )}
+          </div>
+        ))}
+      </section>
+
+
+      {/* 4. Empty State / Action */}
+      <footer className="px-8 text-center pt-4">
+        <button className="text-[11px] font-black uppercase tracking-[0.3em] text-[#333333] hover:text-[#555555] transition-colors">
+          Download Schedule PDF
+        </button>
+      </footer>
     </div>
   );
 }
+
 

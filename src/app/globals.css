@@ -1,62 +1,37 @@
 @import "tailwindcss";
 
-/* Modern Mobile-Native Design System */
+/* CRED-Inspired Premium Design System */
 :root {
-  /* Dynamic Palette */
-  --app-bg: #f8f9ff;
-  --app-card: #ffffff;
-  --app-card-border: rgba(0, 0, 0, 0.05);
-  --app-text: #1a1c1e;
-  --app-text-muted: #6b7280;
+  /* Core Palette (Default Dark) */
+  --app-bg: #0d0d0d;
+  --app-card: #141414;
+  --app-card-border: rgba(255, 255, 255, 0.05);
+  --app-text: #ffffff;
+  --app-text-muted: #808080;
   
-  /* Primary Accent: Indigo/Violet gradient */
-  --app-accent: #6366f1;
-  --app-accent-gradient: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-  --app-accent-soft: rgba(99, 102, 241, 0.1);
+  /* Neon Accents */
+  --app-accent: #32ff7e; /* Neon Green */
+  --app-accent-gradient: linear-gradient(135deg, #32ff7e 0%, #7efff5 100%);
+  --app-accent-soft: rgba(50, 255, 126, 0.1);
   
   /* System Colors */
-  --app-success: #10b981;
-  --app-warning: #f59e0b;
-  --app-error: #ef4444;
+  --app-success: #32ff7e;
+  --app-warning: #fffa65;
+  --app-error: #ff4d4d;
   
-  /* Navigation */
-  --app-nav-bg: rgba(255, 255, 255, 0.8);
-  --app-nav-border: rgba(0, 0, 0, 0.08);
-  
-  /* Shadows */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --app-bg: #0f172a;
-    --app-card: #1e293b;
-    --app-card-border: rgba(255, 255, 255, 0.05);
-    --app-text: #f8fafc;
-    --app-text-muted: #94a3b8;
-    
-    --app-nav-bg: rgba(15, 23, 42, 0.8);
-    --app-nav-border: rgba(255, 255, 255, 0.1);
-    
-    --app-accent-soft: rgba(99, 102, 241, 0.2);
-  }
+  /* Neomorphic Shadows */
+  --neu-raised: 8px 8px 16px #050505, -8px -8px 16px #151515;
+  --neu-pressed: inset 6px 6px 12px #050505, inset -6px -6px 12px #151515;
+  --glass-bg: rgba(20, 20, 20, 0.7);
 }
 
 @theme inline {
-  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-sans: "Outfit", "Inter", system-ui, sans-serif;
 }
 
 * {
   box-sizing: border-box;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-html {
-  -webkit-tap-highlight-color: transparent;
-  scroll-behavior: smooth;
 }
 
 body {
@@ -68,37 +43,45 @@ body {
   overflow-x: hidden;
 }
 
-/* Glassmorphism Effect */
+/* Glassmorphism */
 .glass {
-  background: var(--app-nav-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
-/* Premium Card Styles */
-.card-premium {
-  background: var(--app-card);
-  border: 1px solid var(--app-card-border);
-  box-shadow: var(--shadow-sm);
-  border-radius: 1.25rem;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+/* CRED Card Style */
+.card-cred {
+  background: linear-gradient(145deg, #161616, #0e0e0e);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  box-shadow: 12px 12px 24px #050505, -4px -4px 12px rgba(255, 255, 255, 0.02);
+  border-radius: 1.5rem;
+  transition: all 0.3s ease;
 }
 
-.card-premium:active {
-  transform: scale(0.98);
+.card-cred:active {
+  box-shadow: inset 4px 4px 8px #050505, inset -4px -4px 8px rgba(255, 255, 255, 0.01);
+  transform: scale(0.99);
 }
 
-/* Hairline borders */
-.hairline-b {
-  border-bottom: 1px solid var(--app-nav-border);
+/* Accent Button */
+.btn-neon {
+  background: var(--app-accent-gradient);
+  color: #000;
+  font-weight: 800;
+  border-radius: 1rem;
+  box-shadow: 0 0 20px rgba(50, 255, 126, 0.3);
+  transition: all 0.2s ease;
 }
 
-.hairline-t {
-  border-top: 1px solid var(--app-nav-border);
+.btn-neon:active {
+  box-shadow: 0 0 10px rgba(50, 255, 126, 0.5);
+  transform: scale(0.96);
 }
 
-/* Custom Scrollbar for mobile-feel */
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
   display: none;
 }
+
 
