@@ -22,6 +22,8 @@ import {
 } from "@/components/ui/select";
 import { Plus, UserPlus, X, ChevronDown } from "lucide-react";
 import { getStudents, createStudent, getBatches, createEnrollment } from "@/lib/db";
+import { useAuth } from "@/components/auth-provider";
+
 
 import { type Batch } from "@/types/batch";
 import { type Student } from "@/types/student";
@@ -50,12 +52,14 @@ export default function StudentsPage() {
   // Generate days 1-28
   const billingDays = Array.from({ length: 28 }, (_, i) => (i + 1).toString());
 
+  const { profile } = useAuth();
+
   const addCustomSubject = () => {
-    if (!customSubjectName || !customSubjectPrice) return;
+    if (!customSubjectName || !customSubjectPrice || !profile?.tuitionId) return;
     setSelectedSubjects([...selectedSubjects, {
       name: customSubjectName,
       price: Number(customSubjectPrice),
-      tuitionId: APP_CONFIG.DEFAULT_TUITION_ID
+      tuitionId: profile.tuitionId
     }]);
 
     setCustomSubjectName("");
@@ -82,7 +86,7 @@ export default function StudentsPage() {
   }, []);
 
   const handleCreateStudent = async () => {
-    if (!newStudentName || !newStudentBatch || selectedSubjects.length === 0) return;
+    if (!newStudentName || !newStudentBatch || selectedSubjects.length === 0 || !profile?.tuitionId) return;
     setIsSubmitting(true);
     try {
       // 1. Create the Student Document (Core Info Only)
@@ -92,7 +96,7 @@ export default function StudentsPage() {
         batch: newStudentBatch,
         billingDay: Number(newStudentBillingDay),
         status: "active",
-        tuitionId: APP_CONFIG.DEFAULT_TUITION_ID,
+        tuitionId: profile.tuitionId,
         avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${newStudentName}`,
       });
 
@@ -100,13 +104,14 @@ export default function StudentsPage() {
       const enrollmentPromises = selectedSubjects.map(s => 
         createEnrollment({
           studentId: studentId,
-          tuitionId: APP_CONFIG.DEFAULT_TUITION_ID,
+          tuitionId: profile.tuitionId!,
           subject: s.name,
           monthlyFee: s.price,
           status: "active",
           endedAt: null
         })
       );
+
 
       await Promise.all(enrollmentPromises);
 
