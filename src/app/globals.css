@@ -1,26 +1,104 @@
 @import "tailwindcss";
 
+/* Modern Mobile-Native Design System */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Dynamic Palette */
+  --app-bg: #f8f9ff;
+  --app-card: #ffffff;
+  --app-card-border: rgba(0, 0, 0, 0.05);
+  --app-text: #1a1c1e;
+  --app-text-muted: #6b7280;
+  
+  /* Primary Accent: Indigo/Violet gradient */
+  --app-accent: #6366f1;
+  --app-accent-gradient: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  --app-accent-soft: rgba(99, 102, 241, 0.1);
+  
+  /* System Colors */
+  --app-success: #10b981;
+  --app-warning: #f59e0b;
+  --app-error: #ef4444;
+  
+  /* Navigation */
+  --app-nav-bg: rgba(255, 255, 255, 0.8);
+  --app-nav-border: rgba(0, 0, 0, 0.08);
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --app-bg: #0f172a;
+    --app-card: #1e293b;
+    --app-card-border: rgba(255, 255, 255, 0.05);
+    --app-text: #f8fafc;
+    --app-text-muted: #94a3b8;
+    
+    --app-nav-bg: rgba(15, 23, 42, 0.8);
+    --app-nav-border: rgba(255, 255, 255, 0.1);
+    
+    --app-accent-soft: rgba(99, 102, 241, 0.2);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@theme inline {
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
 }
+
+* {
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100svh;
+  background: var(--app-bg);
+  color: var(--app-text);
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+}
+
+/* Glassmorphism Effect */
+.glass {
+  background: var(--app-nav-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Premium Card Styles */
+.card-premium {
+  background: var(--app-card);
+  border: 1px solid var(--app-card-border);
+  box-shadow: var(--shadow-sm);
+  border-radius: 1.25rem;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card-premium:active {
+  transform: scale(0.98);
+}
+
+/* Hairline borders */
+.hairline-b {
+  border-bottom: 1px solid var(--app-nav-border);
+}
+
+.hairline-t {
+  border-top: 1px solid var(--app-nav-border);
+}
+
+/* Custom Scrollbar for mobile-feel */
+::-webkit-scrollbar {
+  display: none;
+}
+
