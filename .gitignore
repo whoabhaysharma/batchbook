@@ -41,3 +41,10 @@ firestore-debug.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# firebase
+.firebase/
+seed.ts
+auth-debug.log*
+ui-debug.log*
+
