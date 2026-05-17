@@ -1,14 +1,40 @@
 export interface FeeLedger {
   id: string;
+
   studentId: string;
   tuitionId: string;
-  amount: number;
+
+  billingPeriod: string; // Format: YYYY-MM (e.g. 2026-08)
+
   dueDate: number; // Unix timestamp
-  billingMonth: string; // e.g., "May 2026"
-  status: "pending" | "paid" | "overdue" | "cancelled";
+
+  amount: number; // Total invoice amount
+
+  paidAmount: number; // Total paid against this invoice
+
+  remainingAmount: number; // amount - paidAmount
+
+  subjects: {
+    enrollmentId: string;
+    subject: string;
+    monthlyFee: number;
+  }[];
+
+  status:
+    | "pending"
+    | "partial"
+    | "paid"
+    | "overdue"
+    | "cancelled";
+
+  generatedFrom: "cron" | "lazy";
+
   paidAt?: number;
+
   transactionId?: string;
+
   remarks?: string;
+
   createdAt: any; // Firestore ServerTimestamp
 }
 

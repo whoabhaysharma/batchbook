@@ -32,21 +32,26 @@ export const runBillingJob = onRequest({ cors: true }, async (req, res) => {
     let createdCount = 0;
 
     for (const student of targetStudents as any[]) {
-      // 3. Check if bill already exists for this month
-      const ledgerSnap = await db.collection("ledger")
-        .where("studentId", "==", student.id)
-        .where("billingMonth", "==", billingMonthId)
-        .get();
+      // 3. Check if bill already exists for this month using the deterministic ledger ID
+      const ledgerId = `${student.id}_${billingMonthId}`;
+      const ledgerDocRef = db.collection("ledger").doc(ledgerId);
+      const ledgerDocSnap = await ledgerDocRef.get();
 
-      if (ledgerSnap.empty) {
-        // 4. Fetch active subject enrollments for this student
+      if (!ledgerDocSnap.exists) {
+        // 4. Fetch all subject enrollments for this student
         const enrollmentsSnap = await db.collection("subject_enrollments")
           .where("studentId", "==", student.id)
-          .where("status", "==", "active")
           .get();
 
-        const enrollments = enrollmentsSnap.docs.map(doc => doc.data());
-        const totalAmount = enrollments.reduce((acc, curr) => acc + (curr.monthlyFee || 0), 0);
+        const enrollments = enrollmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const activeEnrollments = enrollments.filter((e: any) => {
+          const startedTime = e.startedAt?.toMillis ? e.startedAt.toMillis() : new Date(e.startedAt).getTime();
+          const endedTime = e.endedAt ? (e.endedAt.toMillis ? e.endedAt.toMillis() : new Date(e.endedAt).getTime()) : null;
+          const invoiceTime = today.getTime();
+          return startedTime <= invoiceTime && (endedTime === null || endedTime > invoiceTime);
+        });
+
+        const totalAmount = activeEnrollments.reduce((acc, curr: any) => acc + (curr.monthlyFee || 0), 0);
 
         if (totalAmount > 0) {
           const dueDate = new Date(today.getFullYear(), today.getMonth(), student.billingDay);
@@ -60,16 +65,23 @@ export const runBillingJob = onRequest({ cors: true }, async (req, res) => {
           const ledgerData = {
             studentId: student.id,
             tuitionId: student.tuitionId,
-            amount: totalAmount,
-
-            status: "pending",
-            billingMonth: billingMonthId,
+            billingPeriod: billingMonthId,
             dueDate: dueDate.getTime(),
+            amount: totalAmount,
+            paidAmount: 0,
+            remainingAmount: totalAmount,
+            subjects: activeEnrollments.map((e: any) => ({
+              enrollmentId: e.id || "",
+              subject: e.subject,
+              monthlyFee: e.monthlyFee
+            })),
+            status: "pending",
+            generatedFrom: "cron" as const,
             remarks: `Automated bill for ${billingMonthLabel}. Generated via Public Cloud Function.`,
             createdAt: FieldValue.serverTimestamp(),
           };
 
-          await db.collection("ledger").add(ledgerData);
+          await ledgerDocRef.set(ledgerData);
 
           createdCount++;
           results.push({ name: student.name, status: "created", amount: totalAmount });

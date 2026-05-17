@@ -7,7 +7,7 @@ import { IconMore } from "@/components/icons/tab-icons";
 import { getBatches, getMonthlyRevenue, getTuition, getStudents, getPendingDues, getRevenueHistory, getPaymentStats } from "@/lib/db";
 import { type Batch } from "@/types/batch";
 import { useAuth } from "@/components/auth-provider";
-import { cn, formatTimeRange } from "@/lib/utils";
+import { cn, formatTimeRange, getPeriodString, formatPeriod } from "@/lib/utils";
 import { 
   LineChart, 
   Line, 
@@ -64,13 +64,13 @@ export default function HomePage() {
       getRevenueHistory(profile.tuitionId).then(setRevenueHistory);
       getPaymentStats(profile.tuitionId).then(setPaymentStats);
       
-      const currentMonth = getMonthLabel(now);
+      const currentPeriod = getPeriodString(now);
       const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const prevMonth = getMonthLabel(prevMonthDate);
+      const prevPeriod = getPeriodString(prevMonthDate);
 
       Promise.all([
-        getMonthlyRevenue(profile.tuitionId, currentMonth),
-        getMonthlyRevenue(profile.tuitionId, prevMonth)
+        getMonthlyRevenue(profile.tuitionId, currentPeriod),
+        getMonthlyRevenue(profile.tuitionId, prevPeriod)
       ]).then(([currentRev, prevRev]) => {
         setRevenue(currentRev);
         if (prevRev > 0) {
@@ -177,7 +177,7 @@ export default function HomePage() {
              <div className="h-[200px] w-full">
                {isClient && (
                  <ResponsiveContainer width="100%" height="100%">
-                   <LineChart data={revenueHistory.length > 0 ? revenueHistory : [{ month: 'N/A', amount: 0 }]}>
+                   <LineChart data={revenueHistory.length > 0 ? revenueHistory.map(h => ({ ...h, month: formatPeriod(h.month) })) : [{ month: 'N/A', amount: 0 }]}>
                      <CartesianGrid strokeDasharray="3 3" stroke="#1a1a1a" vertical={false} />
                      <XAxis 
                        dataKey="month" 

@@ -1,4 +1,4 @@
-import { collection, query, getDocs, doc, getDoc, orderBy, addDoc, serverTimestamp, where, and, updateDoc } from "firebase/firestore";
+import { collection, query, getDocs, doc, getDoc, orderBy, addDoc, serverTimestamp, where, and, updateDoc, setDoc } from "firebase/firestore";
 
 import { getFirebaseDb } from "./firebase";
 import { Student, CreateStudentInput } from "../types/student";
@@ -9,19 +9,21 @@ import { FeeLedger, CreateLedgerInput } from "../types/ledger";
 
 export async function createLedger(ledger: CreateLedgerInput): Promise<string> {
   const db = getFirebaseDb();
-  const docRef = await addDoc(collection(db, "ledger"), {
+  const id = `${ledger.studentId}_${ledger.billingPeriod}`;
+  const docRef = doc(db, "ledger", id);
+  await setDoc(docRef, {
     ...ledger,
     createdAt: serverTimestamp(),
   });
-  return docRef.id;
+  return id;
 }
 
-export async function checkExistingLedger(studentId: string, billingMonth: string): Promise<boolean> {
+export async function checkExistingLedger(studentId: string, billingPeriod: string): Promise<boolean> {
   const db = getFirebaseDb();
   const q = query(
     collection(db, "ledger"),
     where("studentId", "==", studentId),
-    where("billingMonth", "==", billingMonth)
+    where("billingPeriod", "==", billingPeriod)
   );
   const querySnapshot = await getDocs(q);
   return !querySnapshot.empty;
@@ -135,15 +137,15 @@ export async function updateLedgerStatus(id: string, updates: Partial<FeeLedger>
     updatedAt: serverTimestamp(),
   });
 }
-export async function getMonthlyRevenue(tuitionId: string, billingMonth: string): Promise<number> {
+export async function getMonthlyRevenue(tuitionId: string, billingPeriod: string): Promise<number> {
   const db = getFirebaseDb();
   const q = query(
     collection(db, "ledger"),
     where("tuitionId", "==", tuitionId),
-    where("billingMonth", "==", billingMonth)
+    where("billingPeriod", "==", billingPeriod)
   );
   const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.reduce((acc, doc) => acc + (doc.data().amount || 0), 0);
+  return querySnapshot.docs.reduce((acc, doc) => acc + (doc.data().paidAmount || 0), 0);
 }
 
 export async function getRevenueHistory(tuitionId: string): Promise<{ month: string, amount: number }[]> {
@@ -158,9 +160,9 @@ export async function getRevenueHistory(tuitionId: string): Promise<{ month: str
   const history: Record<string, number> = {};
   querySnapshot.docs.forEach(doc => {
     const data = doc.data();
-    const month = data.billingMonth;
+    const month = data.billingPeriod;
     if (month) {
-      history[month] = (history[month] || 0) + (data.amount || 0);
+      history[month] = (history[month] || 0) + (data.paidAmount || 0);
     }
   });
 
@@ -188,4 +190,158 @@ export async function getPaymentStats(tuitionId: string): Promise<{ status: stri
   });
 
   return Object.entries(stats).map(([status, val]) => ({ status, ...val }));
+}
+
+export async function recordStudentPayment(
+  studentId: string,
+  tuitionId: string,
+  paymentAmount: number,
+  remarks?: string
+): Promise<void> {
+  const db = getFirebaseDb();
+  let remainingPayment = paymentAmount;
+
+  // 1. Fetch all invoices for the student
+  const q = query(
+    collection(db, "ledger"),
+    where("studentId", "==", studentId)
+  );
+  const snap = await getDocs(q);
+  const allInvoices = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FeeLedger));
+
+  // Filter out paid or cancelled ones, and sort chronologically by billingPeriod (oldest first)
+  const unpaidInvoices = allInvoices
+    .filter(inv => inv.status !== "paid" && inv.status !== "cancelled")
+    .sort((a, b) => a.billingPeriod.localeCompare(b.billingPeriod));
+
+  // 2. Allocate payment to existing unpaid invoices
+  for (const invoice of unpaidInvoices) {
+    const remainingInvoice = invoice.amount - (invoice.paidAmount || 0);
+    if (remainingInvoice <= 0) continue;
+
+    const applyAmount = Math.min(remainingPayment, remainingInvoice);
+
+    const updatedPaid = (invoice.paidAmount || 0) + applyAmount;
+    const updatedRemaining = invoice.amount - updatedPaid;
+    const updatedStatus = updatedRemaining === 0 ? "paid" : "partial";
+
+    // Update document in Firestore
+    const docRef = doc(db, "ledger", invoice.id);
+    await updateDoc(docRef, {
+      paidAmount: updatedPaid,
+      remainingAmount: updatedRemaining,
+      status: updatedStatus,
+      paidAt: updatedStatus === "paid" ? Date.now() : invoice.paidAt || Date.now(),
+      remarks: remarks || invoice.remarks || "",
+      updatedAt: serverTimestamp()
+    });
+
+    remainingPayment -= applyAmount;
+    if (remainingPayment <= 0) break;
+  }
+
+  // 3. Handle Advance Payments: Lazily generate future invoices if payment remains!
+  if (remainingPayment > 0) {
+    // Determine the latest billing period in the database for this student
+    const sortedAll = allInvoices.sort((a, b) => b.billingPeriod.localeCompare(a.billingPeriod));
+    let latestPeriod = sortedAll.length > 0 ? sortedAll[0].billingPeriod : "";
+
+    // If no invoices exist, default to the current period (YYYY-MM)
+    if (!latestPeriod) {
+      const today = new Date();
+      const y = today.getFullYear();
+      const m = (today.getMonth() + 1).toString().padStart(2, "0");
+      latestPeriod = `${y}-${m}`;
+    }
+
+    // Get the student details to fetch their billingDay
+    const studentDoc = await getDoc(doc(db, "students", studentId));
+    if (studentDoc.exists()) {
+      const studentData = studentDoc.data();
+      const billingDay = studentData.billingDay || 1;
+
+      // Sequence future billing periods
+      let [year, month] = latestPeriod.split("-").map(Number);
+
+      while (remainingPayment > 0) {
+        // Increment month
+        month++;
+        if (month > 12) {
+          month = 1;
+          year++;
+        }
+        const futurePeriod = `${year}-${month.toString().padStart(2, "0")}`;
+        const futureInvoiceDate = new Date(year, month - 1, billingDay);
+
+        // Fetch subject enrollments for the student
+        const enrollmentsSnap = await getDocs(
+          query(collection(db, "subject_enrollments"), where("studentId", "==", studentId))
+        );
+        const enrollments = enrollmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // Filter active enrollments as of futureInvoiceDate
+        const activeEnrollments = enrollments.filter((e: any) => {
+          const startedTime = e.startedAt?.toMillis ? e.startedAt.toMillis() : new Date(e.startedAt).getTime();
+          const endedTime = e.endedAt ? (e.endedAt.toMillis ? e.endedAt.toMillis() : new Date(e.endedAt).getTime()) : null;
+          const invoiceTime = futureInvoiceDate.getTime();
+          return startedTime <= invoiceTime && (endedTime === null || endedTime > invoiceTime);
+        });
+
+        const totalAmount = activeEnrollments.reduce((acc, curr: any) => acc + (curr.monthlyFee || 0), 0);
+
+        if (totalAmount > 0) {
+          const ledgerId = `${studentId}_${futurePeriod}`;
+          const applyAmount = Math.min(remainingPayment, totalAmount);
+
+          const newInvoiceData = {
+            studentId,
+            tuitionId,
+            billingPeriod: futurePeriod,
+            dueDate: futureInvoiceDate.getTime(),
+            amount: totalAmount,
+            paidAmount: applyAmount,
+            remainingAmount: totalAmount - applyAmount,
+            subjects: activeEnrollments.map((e: any) => ({
+              enrollmentId: e.id || "",
+              subject: e.subject,
+              monthlyFee: e.monthlyFee
+            })),
+            status: (totalAmount - applyAmount === 0 ? "paid" : "partial") as any,
+            generatedFrom: "lazy" as const,
+            paidAt: Date.now(),
+            remarks: `Prepayment invoice for ${futurePeriod}. Generated lazily.`,
+            createdAt: serverTimestamp(),
+          };
+
+          // Save deterministic document
+          await setDoc(doc(db, "ledger", ledgerId), newInvoiceData);
+
+          remainingPayment -= applyAmount;
+        } else {
+          // If no active enrollments exist for this future period, break to avoid infinite loop
+          break;
+        }
+      }
+    }
+  }
+
+  // 4. Log the transaction receipt in the payments collection
+  await addDoc(collection(db, "payments"), {
+    studentId,
+    tuitionId,
+    amount: paymentAmount,
+    paymentDate: Date.now(),
+    remarks: remarks || "",
+    createdAt: serverTimestamp()
+  });
+}
+
+export async function recordAdHocPayment(payment: { 
+  studentId: string;
+  tuitionId: string;
+  amount: number;
+  billingMonth: string;
+  remarks?: string;
+}): Promise<void> {
+  await recordStudentPayment(payment.studentId, payment.tuitionId, payment.amount, payment.remarks);
 }
