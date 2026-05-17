@@ -554,3 +554,20 @@ export async function forceGenerateInvoice(
   return ledgerId;
 }
 
+export async function getInvoicesByStudentId(studentId: string): Promise<Invoice[]> {
+  const db = getFirebaseDb();
+  const q = query(collection(db, "invoice"), where("studentId", "==", studentId));
+  const querySnapshot = await getDocs(q);
+  const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Invoice));
+  return data.sort((a, b) => (b.billingPeriod > a.billingPeriod ? 1 : -1));
+}
+
+export async function getPaymentsByStudentId(studentId: string): Promise<any[]> {
+  const db = getFirebaseDb();
+  const q = query(collection(db, "payments"), where("studentId", "==", studentId));
+  const querySnapshot = await getDocs(q);
+  const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+  return data.sort((a, b) => b.paymentDate - a.paymentDate);
+}
+
+

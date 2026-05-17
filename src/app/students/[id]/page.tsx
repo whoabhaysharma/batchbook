@@ -5,10 +5,19 @@ import { IconCalendar, IconCash, IconUsers, IconPlus } from "@/components/icons/
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth-provider";
-import { getStudentById, getEnrollmentsByStudentId, updateStudent, forceGenerateInvoice } from "@/lib/db";
+import { 
+  getStudentById, 
+  getEnrollmentsByStudentId, 
+  updateStudent, 
+  forceGenerateInvoice,
+  getInvoicesByStudentId,
+  getPaymentsByStudentId
+} from "@/lib/db";
 import { Student } from "@/types/student";
 import { SubjectEnrollment } from "@/types/enrollment";
+import { Invoice } from "@/types/invoice";
 import { useParams } from "next/navigation";
+import { formatPeriod } from "@/lib/utils";
 import { ChevronDown, ChevronUp, Wrench, Sparkles, CheckCircle2, AlertCircle } from "lucide-react";
 
 export default function StudentDetailPage() {
@@ -24,6 +33,11 @@ export default function StudentDetailPage() {
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<"active" | "inactive" | "on-hold">("active");
   const [isUpdating, setIsUpdating] = useState(false);
+
+  // Payments and Invoices states
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<"curriculum" | "invoices" | "payments">("curriculum");
 
   // Force invoice generation states (not upfront)
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
@@ -43,6 +57,9 @@ export default function StudentDetailPage() {
     try {
       await forceGenerateInvoice(student.id, profile.tuitionId, billingPeriodInput);
       setGenMessage({ text: `Success! Invoice generated for ${billingPeriodInput}.`, isError: false });
+      // Reload invoices list in real-time
+      const updatedInvoices = await getInvoicesByStudentId(student.id);
+      setInvoices(updatedInvoices);
     } catch (err: any) {
       console.error(err);
       setGenMessage({ text: err.message || "Failed to forcefully generate invoice.", isError: true });
@@ -57,12 +74,16 @@ export default function StudentDetailPage() {
     
     const fetchStudentData = async () => {
       try {
-        const [studentData, enrollmentData] = await Promise.all([
+        const [studentData, enrollmentData, invoicesData, paymentsData] = await Promise.all([
           getStudentById(id),
-          getEnrollmentsByStudentId(id)
+          getEnrollmentsByStudentId(id),
+          getInvoicesByStudentId(id),
+          getPaymentsByStudentId(id)
         ]);
         setStudent(studentData);
         setEnrollments(enrollmentData);
+        setInvoices(invoicesData);
+        setPayments(paymentsData);
       } catch (err) {
         console.error(err);
       } finally {
@@ -166,20 +187,114 @@ export default function StudentDetailPage() {
 
       {/* 3. Information Sections */}
       <section className="flex flex-col gap-8 px-8">
-        {/* Subjects & Curriculum */}
-        <div className="flex flex-col gap-4">
-          <h3 className="text-[11px] font-black uppercase tracking-[0.4em] text-[#333333]">Curriculum</h3>
-          <div className="flex flex-col gap-3">
-             {enrollments.map((sub, i) => (
-               <div key={i} className="card-cred p-5 flex items-center justify-between">
-                  <div className="flex flex-col">
-                    <span className="text-[13px] font-bold text-white">{sub.subject}</span>
-                    <span className="text-[9px] font-black text-[#444444] uppercase tracking-widest">Enrolled {sub.startedAt?.seconds ? new Date(sub.startedAt.seconds * 1000).toLocaleDateString() : "Recent"}</span>
-                  </div>
-                  <span className="text-[15px] font-black text-[var(--app-accent)]">₹{sub.monthlyFee}</span>
-               </div>
-             ))}
+        {/* ── SEGMENTED TABBED CONTENT ── */}
+        <div className="flex flex-col gap-5">
+          {/* Tabs selector */}
+          <div className="flex p-1 rounded-2xl bg-[#0d0d0d] border border-white/5 shadow-[neu-pressed]">
+            {[
+              { id: "curriculum", label: "Curriculum" },
+              { id: "invoices", label: "Invoices" },
+              { id: "payments", label: "Payments" }
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={cn(
+                  "flex-1 h-11 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all outline-none",
+                  activeTab === tab.id
+                    ? "bg-[#1a1a1a] text-white shadow-[neu-raised] border border-white/10"
+                    : "text-[#444444]"
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
+
+          {/* Tab Content: Curriculum */}
+          {activeTab === "curriculum" && (
+            <div className="flex flex-col gap-3">
+               {enrollments.map((sub, i) => (
+                 <div key={i} className="card-cred p-5 flex items-center justify-between">
+                    <div className="flex flex-col">
+                      <span className="text-[13px] font-bold text-white">{sub.subject}</span>
+                      <span className="text-[9px] font-black text-[#444444] uppercase tracking-widest">Enrolled {sub.startedAt?.seconds ? new Date(sub.startedAt.seconds * 1000).toLocaleDateString() : "Recent"}</span>
+                    </div>
+                    <span className="text-[15px] font-black text-[var(--app-accent)]">₹{sub.monthlyFee}</span>
+                 </div>
+               ))}
+               {enrollments.length === 0 && (
+                 <div className="flex flex-col items-center justify-center py-10 gap-2 border border-white/5 border-dashed rounded-3xl bg-[#030303]">
+                   <span className="text-[10px] font-black uppercase tracking-widest text-[#222222]">No Enrollments Found</span>
+                 </div>
+               )}
+            </div>
+          )}
+
+          {/* Tab Content: Invoices */}
+          {activeTab === "invoices" && (
+            <div className="flex flex-col gap-3">
+               {invoices.map((inv) => {
+                 const displayDue = inv.remainingAmount ?? inv.amount;
+                 return (
+                   <div key={inv.id} className="card-cred p-5 flex items-center justify-between">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[14px] font-bold text-white">
+                          {formatPeriod(inv.billingPeriod)}
+                        </span>
+                        <span className="text-[9px] font-black text-[#444444] uppercase tracking-widest">
+                          DUE {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : "—"}
+                        </span>
+                      </div>
+                      <div className="flex flex-col items-end gap-1.5">
+                        <span className="text-[15px] font-black text-white">₹{displayDue}</span>
+                        <span className={cn(
+                          "px-2 py-0.5 rounded border border-white/5 text-[8px] font-black uppercase tracking-widest",
+                          inv.status === "paid" ? "text-[var(--app-accent)] bg-[var(--app-accent-soft)]" :
+                          inv.status === "overdue" ? "text-[#ff4d4d] bg-[#ff4d4d10]" :
+                          "text-[#ffcc00] bg-[#ffcc0010]"
+                        )}>
+                          {inv.status}
+                        </span>
+                      </div>
+                   </div>
+                 );
+               })}
+               {invoices.length === 0 && (
+                 <div className="flex flex-col items-center justify-center py-12 gap-2 border border-white/5 border-dashed rounded-3xl bg-[#030303]">
+                   <span className="text-[10px] font-black uppercase tracking-widest text-[#222222]">No Invoices Issued</span>
+                 </div>
+               )}
+            </div>
+          )}
+
+          {/* Tab Content: Payments */}
+          {activeTab === "payments" && (
+            <div className="flex flex-col gap-3">
+               {payments.map((p) => (
+                 <div key={p.id} className="card-cred p-5 flex items-center justify-between">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[14px] font-bold text-white">₹{p.amount}</span>
+                      <span className="text-[9px] font-black text-[#444444] uppercase tracking-widest">
+                        {p.paymentDate ? new Date(p.paymentDate).toLocaleDateString() : "Recent"}
+                      </span>
+                      {p.remarks && (
+                        <p className="text-[10px] text-[#555555] italic mt-0.5">"{p.remarks}"</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 text-[8px] font-black uppercase tracking-widest text-[var(--app-accent)]">
+                      <CheckCircle2 className="h-3 w-3 shrink-0" />
+                      Cleared
+                    </div>
+                 </div>
+               ))}
+               {payments.length === 0 && (
+                 <div className="flex flex-col items-center justify-center py-12 gap-2 border border-white/5 border-dashed rounded-3xl bg-[#030303]">
+                   <span className="text-[10px] font-black uppercase tracking-widest text-[#222222]">No Receipts Found</span>
+                 </div>
+               )}
+            </div>
+          )}
         </div>
 
 
