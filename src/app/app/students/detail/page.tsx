@@ -140,7 +140,7 @@ export default function StudentDetailPage() {
       <div className="min-h-screen flex items-center justify-center bg-[#050505] p-10 text-center">
         <div className="flex flex-col gap-4">
           <p className="text-xl font-black text-white">Student not found</p>
-          <Link href="/students" className="text-[10px] font-black text-[var(--app-accent)] uppercase tracking-widest">
+          <Link href="/app/students" className="text-[10px] font-black text-[var(--app-accent)] uppercase tracking-widest">
             Back to Directory
           </Link>
         </div>
@@ -404,7 +404,7 @@ export default function StudentDetailPage() {
 
       {/* 4. Actions Footer */}
       <footer className="px-8 flex flex-col gap-4">
-         <Link href="/payments" className="h-16 w-full btn-neon text-[13px] uppercase tracking-[0.2em] flex items-center justify-center">
+         <Link href="/app/payments" className="h-16 w-full btn-neon text-[13px] uppercase tracking-[0.2em] flex items-center justify-center">
            Manage Finance Hub
          </Link>
          <button 

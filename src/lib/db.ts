@@ -122,6 +122,16 @@ export async function updateStudent(id: string, updates: Partial<Student>): Prom
   } as any);
 }
 
+export async function updateBatch(id: string, updates: Partial<Batch>): Promise<void> {
+  const db = getFirebaseDb();
+  const docRef = doc(db, "batches", id);
+  await updateDoc(docRef, {
+    ...updates,
+    updatedAt: serverTimestamp()
+  } as any);
+}
+
+
 export async function createEnrollment(enrollment: CreateEnrollmentInput): Promise<string> {
   const db = getFirebaseDb();
   const docRef = await addDoc(collection(db, "subject_enrollments"), {

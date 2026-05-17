@@ -83,7 +83,7 @@ export default function HomePage() {
       <section className="px-8 flex flex-col gap-3">
 
         {/* Hero — This month's revenue */}
-        <Link href="/payments" className="card-cred p-6 flex items-center justify-between active:scale-[0.98] transition-all">
+        <Link href="/app/payments" className="card-cred p-6 flex items-center justify-between active:scale-[0.98] transition-all">
           <div className="flex flex-col gap-1">
             <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#444444]">Revenue this month</p>
             <p className="text-[36px] font-black text-white leading-none tracking-tighter">
@@ -97,7 +97,7 @@ export default function HomePage() {
 
         {/* Two supporting tiles */}
         <div className="grid grid-cols-2 gap-3">
-          <Link href="/students" className="card-cred p-5 flex flex-col gap-4 active:scale-95 transition-all">
+          <Link href="/app/students" className="card-cred p-5 flex flex-col gap-4 active:scale-95 transition-all">
             <div className="h-9 w-9 rounded-xl bg-[#0d0d0d] border border-white/5 flex items-center justify-center text-[var(--app-accent)]">
               <Users className="h-5 w-5" />
             </div>
@@ -107,7 +107,7 @@ export default function HomePage() {
             </div>
           </Link>
 
-          <Link href="/payments" className="card-cred p-5 flex flex-col gap-4 active:scale-95 transition-all">
+          <Link href="/app/payments" className="card-cred p-5 flex flex-col gap-4 active:scale-95 transition-all">
             <div className="h-9 w-9 rounded-xl bg-[#ff4d4d10] border border-[#ff4d4d]/10 flex items-center justify-center text-[#ff4d4d]">
               <AlertCircle className="h-5 w-5" />
             </div>
@@ -127,7 +127,7 @@ export default function HomePage() {
         <h2 className="text-[10px] font-black uppercase tracking-[0.35em] text-[#333333]">Quick Actions</h2>
         <div className="grid grid-cols-2 gap-3">
           <Link
-            href="/students?new=1"
+            href="/app/students?new=1"
             className="card-cred p-5 flex items-center gap-3 active:scale-95 transition-all group"
           >
             <div className="h-10 w-10 rounded-xl bg-[#0d0d0d] border border-white/5 flex items-center justify-center text-[var(--app-accent)] group-active:bg-[var(--app-accent-soft)] transition-colors shrink-0">
@@ -140,7 +140,7 @@ export default function HomePage() {
           </Link>
 
           <Link
-            href="/payments"
+            href="/app/payments"
             className="card-cred p-5 flex items-center gap-3 active:scale-95 transition-all group"
           >
             <div className="h-10 w-10 rounded-xl bg-[#0d0d0d] border border-white/5 flex items-center justify-center text-[var(--app-accent)] group-active:bg-[var(--app-accent-soft)] transition-colors shrink-0">
@@ -158,7 +158,7 @@ export default function HomePage() {
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between px-8">
           <h2 className="text-[10px] font-black uppercase tracking-[0.35em] text-[#333333]">Batches</h2>
-          <Link href="/batches" className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--app-accent)]">
+          <Link href="/app/batches" className="text-[10px] font-black uppercase tracking-[0.2em] text-[var(--app-accent)]">
             Manage
           </Link>
         </div>
@@ -171,7 +171,7 @@ export default function HomePage() {
           <div className="mx-8 card-cred py-10 flex flex-col items-center justify-center gap-3">
             <BookOpen className="h-8 w-8 text-[#1a1a1a]" />
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#222222]">No active batches</p>
-            <Link href="/batches" className="text-[10px] font-black uppercase tracking-widest text-[var(--app-accent)] border border-[var(--app-accent)]/20 px-4 py-1.5 rounded-full">
+            <Link href="/app/batches" className="text-[10px] font-black uppercase tracking-widest text-[var(--app-accent)] border border-[var(--app-accent)]/20 px-4 py-1.5 rounded-full">
               Create one
             </Link>
           </div>
@@ -180,7 +180,7 @@ export default function HomePage() {
             {activeBatches.map((batch) => (
               <Link
                 key={batch.id}
-                href="/batches"
+                href="/app/batches"
                 className="card-cred px-5 py-4 flex items-center justify-between active:scale-[0.99] transition-all group"
               >
                 <div className="flex items-center gap-4">
