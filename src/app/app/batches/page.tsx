@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, LayoutGrid, X, Trash2, UserPlus, Settings, Save } from "lucide-react";
+import { Plus, LayoutGrid, X, Trash2, UserPlus, Settings, Save, AlertCircle, Loader2 } from "lucide-react";
 import { IconPlus, IconCalendar, IconUsers } from "@/components/icons/dashboard-icons";
 import { getBatches, createBatch, getStudents, updateStudent, updateBatch } from "@/lib/db";
 import { type Batch } from "@/types/batch";
@@ -45,6 +45,7 @@ export default function BatchesPage() {
   const [endMinute, setEndMinute] = useState("00");
   const [endPeriod, setEndPeriod] = useState("AM");
   const [newBatchDesc, setNewBatchDesc] = useState("");
+  const [createError, setCreateError] = useState<string | null>(null);
   
   // Edit Batch Drawer States
   const [editingBatch, setEditingBatch] = useState<Batch | null>(null);
@@ -57,6 +58,11 @@ export default function BatchesPage() {
   const [editEndHour, setEditEndHour] = useState("10");
   const [editEndMinute, setEditEndMinute] = useState("00");
   const [editEndPeriod, setEditEndPeriod] = useState("AM");
+  const [editError, setEditError] = useState<string | null>(null);
+
+  // Members Management states
+  const [memberActionLoading, setMemberActionLoading] = useState<string | null>(null); // holds studentId or "adding"
+  const [memberError, setMemberError] = useState<string | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [open, setOpen] = useState(false);
@@ -97,12 +103,16 @@ export default function BatchesPage() {
     setEditEndHour(batch.endTime.hour.toString().padStart(2, "0"));
     setEditEndMinute(batch.endTime.minute.toString().padStart(2, "0"));
     setEditEndPeriod(batch.endTime.period);
+    setEditError(null);
+    setMemberError(null);
+    setMemberActionLoading(null);
     setEditOpen(true);
   };
 
   const handleCreateBatch = async () => {
     if (!newBatchName || !startHour || !startMinute || !startPeriod || !endHour || !endMinute || !endPeriod || !profile?.tuitionId) return;
     setIsSubmitting(true);
+    setCreateError(null);
     try {
       const colors = [
         "from-emerald-500/20",
@@ -140,9 +150,11 @@ export default function BatchesPage() {
       setEndMinute("00");
       setEndPeriod("AM");
       setNewBatchDesc("");
+      setOpen(false); // Close drawer on success
       await fetchData();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      setCreateError(err.message || "Failed to launch batch orbit. Please verify Firestore connectivity.");
     } finally {
       setIsSubmitting(false);
     }
@@ -151,6 +163,7 @@ export default function BatchesPage() {
   const handleUpdateBatch = async () => {
     if (!editingBatch || !editName || !profile?.tuitionId) return;
     setIsSubmitting(true);
+    setEditError(null);
     try {
       // 1. Maintain Referer Integrity: If batch name changed, update all student batch fields
       if (editName !== editingBatch.name) {
@@ -179,8 +192,9 @@ export default function BatchesPage() {
       setEditOpen(false);
       setEditingBatch(null);
       await fetchData();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      setEditError(err.message || "Failed to update batch details. Please verify your connection.");
     } finally {
       setIsSubmitting(false);
     }
@@ -188,6 +202,8 @@ export default function BatchesPage() {
 
   const removeStudentFromBatch = async (student: Student) => {
     if (!editingBatch) return;
+    setMemberActionLoading(student.id);
+    setMemberError(null);
     try {
       await updateStudent(student.id, { batch: "" });
       
@@ -196,13 +212,18 @@ export default function BatchesPage() {
       
       setEditingBatch({ ...editingBatch, students: newCount });
       await fetchData();
-    } catch (err) {
-      console.error("Error removing student from batch:", err);
+    } catch (err: any) {
+      console.error("Error removing student:", err);
+      setMemberError(`Failed to remove ${student.name}: ${err.message || "Error"}`);
+    } finally {
+      setMemberActionLoading(null);
     }
   };
 
   const addStudentToBatch = async (studentId: string) => {
     if (!editingBatch) return;
+    setMemberActionLoading(studentId);
+    setMemberError(null);
     try {
       await updateStudent(studentId, { batch: editingBatch.name });
       
@@ -211,8 +232,11 @@ export default function BatchesPage() {
       
       setEditingBatch({ ...editingBatch, students: newCount });
       await fetchData();
-    } catch (err) {
-      console.error("Error adding student to batch:", err);
+    } catch (err: any) {
+      console.error("Error adding student:", err);
+      setMemberError(`Failed to enroll student: ${err.message || "Error"}`);
+    } finally {
+      setMemberActionLoading(null);
     }
   };
 
@@ -237,19 +261,26 @@ export default function BatchesPage() {
           </h1>
         </div>
         
-        <Drawer open={open} onOpenChange={setOpen}>
+        <Drawer open={open} onOpenChange={(val) => { setOpen(val); if(!val) setCreateError(null); }}>
           <button 
             onClick={() => setOpen(true)}
             className="h-14 w-14 rounded-2xl bg-[#0d0d0d] border border-white/5 shadow-[neu-raised] flex items-center justify-center text-[var(--app-accent)] active:shadow-[neu-pressed] transition-all"
           >
             <IconPlus className="h-7 w-7" />
           </button>
-          <DrawerContent>
+          <DrawerContent className="max-h-[92vh] flex flex-col overflow-hidden">
             <DrawerHeader>
               <DrawerTitle>Initialize Batch</DrawerTitle>
               <DrawerDescription>Define a new learning orbit</DrawerDescription>
             </DrawerHeader>
-            <div className="px-10 flex flex-col gap-8 pb-10">
+            <div className="px-10 flex flex-col gap-8 pb-8 overflow-y-auto pt-2 flex-1">
+                {createError && (
+                  <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-[#ff4d4d] text-xs font-bold flex items-start gap-2.5 animate-in fade-in slide-in-from-top-2 duration-250">
+                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-500" />
+                    <span>{createError}</span>
+                  </div>
+                )}
+
                 <div className="flex flex-col gap-2">
                   <label className="text-[10px] font-black uppercase tracking-[0.3em] text-[#444444] px-1">Batch Name</label>
                   <input 
@@ -373,17 +404,24 @@ export default function BatchesPage() {
                     placeholder="e.g. Intensive coaching for STEM olympiads and core competitive examinations."
                   />
                 </div>
+            </div>
 
-                <DrawerClose asChild>
-                  <button 
-                    onClick={handleCreateBatch}
-                    disabled={isSubmitting || !newBatchName || !startHour || !startMinute || !startPeriod || !endHour || !endMinute || !endPeriod}
-                    className="h-16 w-full btn-neon text-[13px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-30"
-                  >
-                     {isSubmitting ? "Syncing..." : "Launch Batch"}
-                     <LayoutGrid className="h-5 w-5" />
-                  </button>
-                </DrawerClose>
+            <div className="px-10 py-6 bg-[#0d0d0d] border-t border-white/5 flex gap-4">
+              <button 
+                onClick={handleCreateBatch}
+                disabled={isSubmitting || !newBatchName || !startHour || !startMinute || !startPeriod || !endHour || !endMinute || !endPeriod}
+                className="h-16 flex-1 btn-neon text-[13px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-30"
+              >
+                 {isSubmitting ? "Launching..." : "Launch Batch"}
+                 {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin text-black" /> : <LayoutGrid className="h-5 w-5" />}
+              </button>
+              <button 
+                onClick={() => setOpen(false)}
+                disabled={isSubmitting}
+                className="h-16 px-6 rounded-xl bg-[#111111] hover:bg-[#1a1a1a] border border-white/5 text-[13px] font-black uppercase tracking-[0.2em] text-[#555] active:scale-95 transition-all"
+              >
+                Cancel
+              </button>
             </div>
           </DrawerContent>
         </Drawer>
@@ -405,7 +443,7 @@ export default function BatchesPage() {
            </div>
         ) : batches.length > 0 ? (
           batches.map((batch, i) => (
-            <div key={i} className="card-cred p-8 flex flex-col gap-6 group relative overflow-hidden">
+            <div key={i} className="card-cred p-8 flex flex-col gap-6 group relative overflow-hidden animate-in fade-in zoom-in-98 duration-200">
               <div className="flex items-start justify-between relative z-10">
                 <div className="flex flex-col gap-1">
                   <span className="text-[10px] font-black tracking-[0.2em] text-[#444444]">#{batch.id.slice(0, 6).toUpperCase()}</span>
@@ -454,7 +492,7 @@ export default function BatchesPage() {
             </div>
           ))
         ) : (
-          <div className="card-cred p-12 text-center text-[#444444] flex flex-col items-center justify-center gap-4">
+          <div className="card-cred p-12 text-center text-[#444444] flex flex-col items-center justify-center gap-4 animate-in fade-in duration-200">
             <LayoutGrid className="h-8 w-8 text-[#222222]" />
             <div className="flex flex-col gap-1">
               <span className="text-sm font-bold text-white">No Batches Configured</span>
@@ -471,7 +509,7 @@ export default function BatchesPage() {
       </section>
 
       {/* 4. Edit Batch Drawer */}
-      <Drawer open={editOpen} onOpenChange={setEditOpen}>
+      <Drawer open={editOpen} onOpenChange={(val) => { setEditOpen(val); if (!val) { setEditingBatch(null); setEditError(null); setMemberError(null); } }}>
         <DrawerContent className="max-h-[92vh] flex flex-col overflow-hidden">
           <DrawerHeader>
             <DrawerTitle>Manage Batch Orbit</DrawerTitle>
@@ -481,6 +519,13 @@ export default function BatchesPage() {
           {editingBatch && (
             <div className="flex flex-col flex-1 overflow-hidden">
               <div className="px-10 flex flex-col gap-8 pb-8 overflow-y-auto pt-2 flex-1">
+                {editError && (
+                  <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-[#ff4d4d] text-xs font-bold flex items-start gap-2.5 animate-in fade-in slide-in-from-top-2 duration-250">
+                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>{editError}</span>
+                  </div>
+                )}
+
                 {/* Name */}
                 <div className="flex flex-col gap-2">
                   <label className="text-[10px] font-black uppercase tracking-[0.3em] text-[#444444] px-1">Batch Name</label>
@@ -490,16 +535,17 @@ export default function BatchesPage() {
                     onChange={(e) => setEditName(e.target.value)}
                     className="h-14 w-full rounded-2xl bg-[#0d0d0d] border border-white/5 shadow-[neu-pressed] px-6 text-[15px] font-bold text-white outline-none focus:border-[var(--app-accent)]/20 transition-all"
                     placeholder="Morning STEM"
+                    disabled={isSubmitting}
                   />
                 </div>
 
-                {/* Timing (2 Columns) */}
+                {/* Timing */}
                 <div className="grid grid-cols-2 gap-4">
                   {/* Start Time */}
                   <div className="flex flex-col gap-2">
                     <label className="text-[9px] font-black uppercase tracking-[0.2em] text-[#555555] px-1">Start Time</label>
                     <div className="flex gap-1.5">
-                      <Select value={editStartHour} onValueChange={setEditStartHour}>
+                      <Select value={editStartHour} onValueChange={setEditStartHour} disabled={isSubmitting}>
                         <SelectTrigger className="h-11 text-xs">
                           <SelectValue placeholder="Hr" />
                         </SelectTrigger>
@@ -507,7 +553,7 @@ export default function BatchesPage() {
                           {HOURS.map(hr => <SelectItem key={hr} value={hr}>{hr}</SelectItem>)}
                         </SelectContent>
                       </Select>
-                      <Select value={editStartMinute} onValueChange={setEditStartMinute}>
+                      <Select value={editStartMinute} onValueChange={setEditStartMinute} disabled={isSubmitting}>
                         <SelectTrigger className="h-11 text-xs">
                           <SelectValue placeholder="Min" />
                         </SelectTrigger>
@@ -515,7 +561,7 @@ export default function BatchesPage() {
                           {MINUTES.map(min => <SelectItem key={min} value={min}>{min}</SelectItem>)}
                         </SelectContent>
                       </Select>
-                      <Select value={editStartPeriod} onValueChange={setEditStartPeriod}>
+                      <Select value={editStartPeriod} onValueChange={setEditStartPeriod} disabled={isSubmitting}>
                         <SelectTrigger className="h-11 text-xs">
                           <SelectValue placeholder="AM/PM" />
                         </SelectTrigger>
@@ -530,7 +576,7 @@ export default function BatchesPage() {
                   <div className="flex flex-col gap-2">
                     <label className="text-[9px] font-black uppercase tracking-[0.2em] text-[#555555] px-1">End Time</label>
                     <div className="flex gap-1.5">
-                      <Select value={editEndHour} onValueChange={setEditEndHour}>
+                      <Select value={editEndHour} onValueChange={setEditEndHour} disabled={isSubmitting}>
                         <SelectTrigger className="h-11 text-xs">
                           <SelectValue placeholder="Hr" />
                         </SelectTrigger>
@@ -538,7 +584,7 @@ export default function BatchesPage() {
                           {HOURS.map(hr => <SelectItem key={hr} value={hr}>{hr}</SelectItem>)}
                         </SelectContent>
                       </Select>
-                      <Select value={editEndMinute} onValueChange={setEditEndMinute}>
+                      <Select value={editEndMinute} onValueChange={setEditEndMinute} disabled={isSubmitting}>
                         <SelectTrigger className="h-11 text-xs">
                           <SelectValue placeholder="Min" />
                         </SelectTrigger>
@@ -546,7 +592,7 @@ export default function BatchesPage() {
                           {MINUTES.map(min => <SelectItem key={min} value={min}>{min}</SelectItem>)}
                         </SelectContent>
                       </Select>
-                      <Select value={editEndPeriod} onValueChange={setEditEndPeriod}>
+                      <Select value={editEndPeriod} onValueChange={setEditEndPeriod} disabled={isSubmitting}>
                         <SelectTrigger className="h-11 text-xs">
                           <SelectValue placeholder="AM/PM" />
                         </SelectTrigger>
@@ -562,7 +608,7 @@ export default function BatchesPage() {
                 <div className="grid grid-cols-[120px,1fr] gap-6">
                   <div className="flex flex-col gap-2">
                     <label className="text-[10px] font-black uppercase tracking-[0.3em] text-[#444444] px-1">Status</label>
-                    <Select value={editStatus} onValueChange={(val: any) => setEditStatus(val)}>
+                    <Select value={editStatus} onValueChange={(val: any) => setEditStatus(val)} disabled={isSubmitting}>
                       <SelectTrigger className="h-12">
                         <SelectValue />
                       </SelectTrigger>
@@ -580,6 +626,7 @@ export default function BatchesPage() {
                       onChange={(e) => setEditDesc(e.target.value)}
                       className="h-12 w-full rounded-xl bg-[#0d0d0d] border border-white/5 shadow-[neu-pressed] px-4 text-[13px] font-bold text-white outline-none focus:border-[var(--app-accent)]/20 transition-all"
                       placeholder="Batch Description..."
+                      disabled={isSubmitting}
                     />
                   </div>
                 </div>
@@ -591,12 +638,29 @@ export default function BatchesPage() {
                     <span className="text-[9px] font-black uppercase tracking-wider text-[#555555]">{currentMembers.length} Enrolled</span>
                   </div>
 
+                  {memberError && (
+                    <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-[#ff4d4d] text-xs font-bold flex items-start gap-2.5 animate-in fade-in duration-200">
+                      <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                      <span>{memberError}</span>
+                    </div>
+                  )}
+
                   {/* Add Student Dropdown */}
                   <div className="flex flex-col gap-2 bg-[#0d0d0d]/40 border border-white/5 rounded-2xl p-4">
                     <label className="text-[9px] font-black uppercase tracking-[0.2em] text-[#444444] px-1">Enroll New Student</label>
-                    <Select onValueChange={(id) => addStudentToBatch(id)}>
+                    <Select 
+                      onValueChange={(id) => addStudentToBatch(id)}
+                      disabled={memberActionLoading !== null || isSubmitting}
+                    >
                       <SelectTrigger className="h-12 w-full text-xs">
-                        <SelectValue placeholder="Choose a student to add..." />
+                        {memberActionLoading === "adding" ? (
+                          <div className="flex items-center gap-2 text-[#444444]">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            <span>Adding student...</span>
+                          </div>
+                        ) : (
+                          <SelectValue placeholder="Choose a student to add..." />
+                        )}
                       </SelectTrigger>
                       <SelectContent>
                         {nonMembers.length > 0 ? (
@@ -615,21 +679,29 @@ export default function BatchesPage() {
                   {/* List Enrolled Students */}
                   <div className="flex flex-col gap-3 mt-1">
                     {currentMembers.length > 0 ? (
-                      currentMembers.map((student) => (
-                        <div key={student.id} className="flex items-center justify-between p-4 rounded-xl bg-[#0d0d0d] border border-white/5">
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-[13px] font-bold text-white">{student.name}</span>
-                            <span className="text-[9px] font-bold uppercase tracking-wider text-[#444444]">{student.rollNumber}</span>
+                      currentMembers.map((student) => {
+                        const isThisLoading = memberActionLoading === student.id;
+                        return (
+                          <div key={student.id} className="flex items-center justify-between p-4 rounded-xl bg-[#0d0d0d] border border-white/5">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-[13px] font-bold text-white">{student.name}</span>
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-[#444444]">{student.rollNumber}</span>
+                            </div>
+                            <button 
+                              onClick={() => removeStudentFromBatch(student)}
+                              disabled={memberActionLoading !== null || isSubmitting}
+                              className="h-9 w-9 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/10 flex items-center justify-center text-red-500 active:scale-95 transition-all disabled:opacity-30"
+                              title="Remove from batch"
+                            >
+                              {isThisLoading ? (
+                                <Loader2 className="h-4 w-4 animate-spin text-red-500" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                            </button>
                           </div>
-                          <button 
-                            onClick={() => removeStudentFromBatch(student)}
-                            className="h-9 w-9 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/10 flex items-center justify-center text-red-500 active:scale-95 transition-all"
-                            title="Remove from batch"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ))
+                        );
+                      })
                     ) : (
                       <div className="text-center py-6 text-[11px] font-bold text-[#333333] border border-dashed border-white/5 rounded-xl">
                         No students enrolled in this batch yet.
@@ -643,17 +715,28 @@ export default function BatchesPage() {
               <div className="px-10 py-6 bg-[#0d0d0d] border-t border-white/5 shadow-[0_-20px_40px_rgba(0,0,0,0.4)] flex gap-4">
                 <button 
                   onClick={handleUpdateBatch}
-                  disabled={isSubmitting || !editName}
+                  disabled={isSubmitting || !editName || memberActionLoading !== null}
                   className="h-14 flex-1 btn-neon text-[12px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-30"
                 >
-                  <Save className="h-4 w-4" />
-                  {isSubmitting ? "Updating..." : "Save Details"}
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin text-black" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" />
+                      Save Details
+                    </>
+                  )}
                 </button>
-                <DrawerClose asChild>
-                  <button className="h-14 px-6 rounded-xl bg-[#111111] hover:bg-[#1a1a1a] border border-white/5 text-[12px] font-black uppercase tracking-[0.2em] text-[#555555]">
-                    Cancel
-                  </button>
-                </DrawerClose>
+                <button 
+                  onClick={() => setEditOpen(false)}
+                  disabled={isSubmitting}
+                  className="h-14 px-6 rounded-xl bg-[#111111] hover:bg-[#1a1a1a] border border-white/5 text-[12px] font-black uppercase tracking-[0.2em] text-[#555] active:scale-95 transition-all"
+                >
+                  Cancel
+                </button>
               </div>
             </div>
           )}

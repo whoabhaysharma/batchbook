@@ -20,32 +20,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, UserPlus, X, ChevronDown } from "lucide-react";
+import { Plus, UserPlus, X, ChevronDown, AlertCircle, Loader2 } from "lucide-react";
 import { getStudents, createStudent, getBatches, createEnrollment } from "@/lib/db";
 import { useAuth } from "@/components/auth-provider";
-
-
 import { type Batch } from "@/types/batch";
 import { type Student } from "@/types/student";
 import { cn } from "@/lib/utils";
 import { APP_CONFIG } from "@/lib/config";
 
-
-
-
 export default function StudentsPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Student Form States
   const [newStudentName, setNewStudentName] = useState("");
   const [newStudentPhone, setNewStudentPhone] = useState("");
   const [newStudentBatch, setNewStudentBatch] = useState("");
   const [newStudentBillingDay, setNewStudentBillingDay] = useState("1");
   const [selectedSubjects, setSelectedSubjects] = useState<{ name: string, price: number }[]>([]);
-
+  
   const [customSubjectName, setCustomSubjectName] = useState("");
   const [customSubjectPrice, setCustomSubjectPrice] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [studentError, setStudentError] = useState<string | null>(null);
+
+  const [open, setOpen] = useState(false);
 
   const totalFee = selectedSubjects.reduce((acc, s) => acc + s.price, 0);
 
@@ -71,22 +71,31 @@ export default function StudentsPage() {
 
   const fetchData = async () => {
     setLoading(true);
-    const [studentData, batchData] = await Promise.all([
-      getStudents(),
-      getBatches()
-    ]);
-    setStudents(studentData);
-    setBatches(batchData);
-    setLoading(false);
+    if (!profile?.tuitionId) return;
+    try {
+      const [studentData, batchData] = await Promise.all([
+        getStudents(profile.tuitionId),
+        getBatches(profile.tuitionId)
+      ]);
+      setStudents(studentData);
+      setBatches(batchData);
+    } catch (err) {
+      console.error("Error fetching students/batches data:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (profile?.tuitionId) {
+      fetchData();
+    }
+  }, [profile?.tuitionId]);
 
   const handleCreateStudent = async () => {
     if (!newStudentName || !newStudentBatch || selectedSubjects.length === 0 || !profile?.tuitionId) return;
     setIsSubmitting(true);
+    setStudentError(null);
     try {
       // 1. Create the Student Document (Core Info Only)
       const today = new Date();
@@ -117,22 +126,20 @@ export default function StudentsPage() {
         })
       );
 
-
       await Promise.all(enrollmentPromises);
 
-
-
-
+      // Reset form states
       setNewStudentName("");
       setNewStudentPhone("");
       setNewStudentBatch("");
       setNewStudentBillingDay("1");
       setSelectedSubjects([]);
-
-
+      setStudentError(null);
+      setOpen(false); // Cleanly close drawer on success
       await fetchData();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      setStudentError(err.message || "Failed to onboard student. Please verify database connectivity.");
     } finally {
       setIsSubmitting(false);
     }
@@ -151,19 +158,28 @@ export default function StudentsPage() {
           </h1>
         </div>
 
-        <Drawer>
-          <DrawerTrigger asChild>
-            <button className="h-14 w-14 rounded-2xl bg-[#0d0d0d] border border-white/5 shadow-[neu-raised] flex items-center justify-center text-[var(--app-accent)] active:shadow-[neu-pressed] transition-all">
-              <IconPlus className="h-7 w-7" />
-            </button>
-          </DrawerTrigger>
-          <DrawerContent>
+        <Drawer open={open} onOpenChange={(val) => { setOpen(val); if (!val) setStudentError(null); }}>
+          <button 
+            onClick={() => setOpen(true)}
+            className="h-14 w-14 rounded-2xl bg-[#0d0d0d] border border-white/5 shadow-[neu-raised] flex items-center justify-center text-[var(--app-accent)] active:shadow-[neu-pressed] transition-all"
+          >
+            <IconPlus className="h-7 w-7" />
+          </button>
+          <DrawerContent className="max-h-[92vh] flex flex-col overflow-hidden">
             <DrawerHeader className="pb-2">
               <DrawerTitle>Onboard Student</DrawerTitle>
               <DrawerDescription>Secure their spot in your center</DrawerDescription>
             </DrawerHeader>
-            <div className="flex flex-col overflow-hidden max-h-[85vh]">
-              <div className="px-10 flex flex-col gap-6 pb-6 overflow-y-auto pt-2">
+
+            {studentError && (
+              <div className="mx-10 mt-2 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-[#ff4d4d] text-xs font-bold flex items-start gap-2.5 animate-in fade-in duration-200">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>{studentError}</span>
+              </div>
+            )}
+
+            <div className="flex flex-col overflow-hidden flex-1">
+              <div className="px-10 flex flex-col gap-6 pb-6 overflow-y-auto pt-2 flex-1">
                 <div className="grid grid-cols-1 gap-6">
                   <div className="flex flex-col gap-2">
                     <label className="text-[10px] font-black uppercase tracking-[0.3em] text-[#444444] px-1">Full Name</label>
@@ -173,6 +189,7 @@ export default function StudentsPage() {
                       onChange={(e) => setNewStudentName(e.target.value)}
                       className="h-14 w-full rounded-2xl bg-[#0d0d0d] border border-white/5 shadow-[neu-pressed] px-6 text-[15px] font-bold text-white outline-none focus:border-[var(--app-accent)]/20 transition-all"
                       placeholder="e.g. Rahul Sharma"
+                      disabled={isSubmitting}
                     />
                   </div>
 
@@ -184,6 +201,7 @@ export default function StudentsPage() {
                       onChange={(e) => setNewStudentPhone(e.target.value)}
                       className="h-14 w-full rounded-2xl bg-[#0d0d0d] border border-white/5 shadow-[neu-pressed] px-6 text-[15px] font-bold text-white outline-none focus:border-[var(--app-accent)]/20 transition-all"
                       placeholder="+91 00000 00000"
+                      disabled={isSubmitting}
                     />
                   </div>
                 </div>
@@ -191,7 +209,7 @@ export default function StudentsPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex flex-col gap-2">
                     <label className="text-[10px] font-black uppercase tracking-[0.3em] text-[#444444] px-1">Batch</label>
-                    <Select onValueChange={setNewStudentBatch} value={newStudentBatch}>
+                    <Select onValueChange={setNewStudentBatch} value={newStudentBatch} disabled={isSubmitting}>
                       <SelectTrigger className="h-14">
                         <SelectValue placeholder="Select" />
                       </SelectTrigger>
@@ -207,7 +225,7 @@ export default function StudentsPage() {
 
                   <div className="flex flex-col gap-2">
                     <label className="text-[10px] font-black uppercase tracking-[0.3em] text-[#444444] px-1">Billing Day</label>
-                    <Select onValueChange={setNewStudentBillingDay} value={newStudentBillingDay}>
+                    <Select onValueChange={setNewStudentBillingDay} value={newStudentBillingDay} disabled={isSubmitting}>
                       <SelectTrigger className="h-14">
                         <SelectValue placeholder="Day" />
                       </SelectTrigger>
@@ -232,6 +250,7 @@ export default function StudentsPage() {
                       onChange={(e) => setCustomSubjectName(e.target.value)}
                       placeholder="Subject Name"
                       className="h-14 rounded-xl bg-[#111111] border border-white/5 px-4 text-[13px] font-bold text-white outline-none"
+                      disabled={isSubmitting}
                     />
                     <input
                       type="number"
@@ -239,24 +258,29 @@ export default function StudentsPage() {
                       onChange={(e) => setCustomSubjectPrice(e.target.value)}
                       placeholder="Price"
                       className="h-14 rounded-xl bg-[#111111] border border-white/5 px-4 text-[13px] font-bold text-white outline-none"
+                      disabled={isSubmitting}
                     />
                     <button
                       onClick={addCustomSubject}
-                      className="h-14 rounded-xl bg-[var(--app-accent-soft)] border border-[var(--app-accent)]/20 flex items-center justify-center text-[var(--app-accent)]"
+                      disabled={isSubmitting}
+                      className="h-14 rounded-xl bg-[var(--app-accent-soft)] border border-[var(--app-accent)]/20 flex items-center justify-center text-[var(--app-accent)] disabled:opacity-30"
                     >
                       <Plus className="h-5 w-5" />
                     </button>
                   </div>
 
-
                   <div className="flex flex-col gap-2 mt-2">
                     {selectedSubjects.map((subject, i) => (
-                      <div key={i} className="flex items-center justify-between p-4 rounded-xl bg-[#0d0d0d] border border-white/5">
+                      <div key={i} className="flex items-center justify-between p-4 rounded-xl bg-[#0d0d0d] border border-white/5 animate-in fade-in duration-200">
                         <div className="flex flex-col">
                           <span className="text-[13px] font-bold text-white">{subject.name}</span>
                           <span className="text-[10px] font-black text-[var(--app-accent)]">₹{subject.price}</span>
                         </div>
-                        <button onClick={() => removeSubject(i)} className="text-[#333333] hover:text-red-500 transition-colors">
+                        <button 
+                          onClick={() => removeSubject(i)}
+                          disabled={isSubmitting}
+                          className="text-[#333333] hover:text-red-500 transition-colors disabled:opacity-20"
+                        >
                           <X className="h-4 w-4" />
                         </button>
                       </div>
@@ -265,36 +289,39 @@ export default function StudentsPage() {
                 </div>
               </div>
 
-
               {/* Sticky Footer */}
-              <div className="px-10 py-8 bg-[#0d0d0d] border-t border-white/5 shadow-[0_-20px_40px_rgba(0,0,0,0.4)]">
-                <DrawerClose asChild>
-                  <button
-                    onClick={handleCreateStudent}
-                    disabled={isSubmitting || !newStudentName || !newStudentBatch || selectedSubjects.length === 0}
-                    className="h-16 w-full btn-neon text-[13px] font-black uppercase tracking-[0.2em] flex items-center justify-between px-8 active:scale-95 transition-all disabled:opacity-30"
-                  >
-                    <div className="flex items-center gap-3">
-                      {isSubmitting ? "Syncing..." : "Onboard"}
+              <div className="px-10 py-6 bg-[#0d0d0d] border-t border-white/5 shadow-[0_-20px_40px_rgba(0,0,0,0.4)] flex gap-4 items-center">
+                <button
+                  onClick={handleCreateStudent}
+                  disabled={isSubmitting || !newStudentName || !newStudentBatch || selectedSubjects.length === 0}
+                  className="h-16 flex-1 btn-neon text-[13px] font-black uppercase tracking-[0.2em] flex items-center justify-between px-8 active:scale-95 transition-all disabled:opacity-30"
+                >
+                  <div className="flex items-center gap-3">
+                    {isSubmitting ? "Onboarding..." : "Onboard"}
+                    {isSubmitting ? (
+                      <Loader2 className="h-5 w-5 animate-spin text-black" />
+                    ) : (
                       <UserPlus className="h-5 w-5" />
-                    </div>
+                    )}
+                  </div>
 
-                    <div className="flex items-center gap-2 pl-4 border-l border-black/10">
-                      <span className="opacity-60 text-[10px]">TOTAL</span>
-                      <span className="text-[16px] tracking-tight">₹{totalFee}</span>
-                    </div>
-                  </button>
-                </DrawerClose>
+                  <div className="flex items-center gap-2 pl-4 border-l border-black/10">
+                    <span className="opacity-60 text-[10px]">TOTAL</span>
+                    <span className="text-[16px] tracking-tight">₹{totalFee}</span>
+                  </div>
+                </button>
+                <button 
+                  onClick={() => setOpen(false)}
+                  disabled={isSubmitting}
+                  className="h-16 px-6 rounded-2xl bg-[#111111] hover:bg-[#1a1a1a] border border-white/5 text-[13px] font-black uppercase tracking-[0.2em] text-[#555] active:scale-95 transition-all"
+                >
+                  Cancel
+                </button>
               </div>
-
             </div>
-
           </DrawerContent>
         </Drawer>
       </header>
-
-
-
 
       {/* 2. Neomorphic Search Bar */}
       <div className="px-8 flex flex-col gap-6">
@@ -343,7 +370,6 @@ export default function StudentsPage() {
               {student.status === "active" && (
                 <div className="absolute -right-1 -top-1 h-3 w-3 rounded-full bg-[var(--app-accent)] border-2 border-[#141414]" />
               )}
-
             </div>
 
             <div className="flex-1 flex flex-col gap-0.5">
@@ -361,13 +387,9 @@ export default function StudentsPage() {
             )}>
               {student.status}
             </div>
-
           </Link>
         ))}
       </section>
     </div>
-
   );
 }
-
-
