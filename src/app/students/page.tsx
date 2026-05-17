@@ -331,7 +331,7 @@ export default function StudentsPage() {
             Loading directory...
           </div>
         ) : students.map((student, i) => (
-          <Link href={`/students/${student.id}`} key={i} className="card-cred p-6 flex items-center gap-6 group active:scale-[0.98] transition-all">
+          <Link href={`/students/detail?id=${student.id}`} key={i} className="card-cred p-6 flex items-center gap-6 group active:scale-[0.98] transition-all">
             <div className="relative">
               <div className="h-16 w-16 rounded-2xl bg-[#0d0d0d] border border-white/5 shadow-[neu-raised] flex items-center justify-center overflow-hidden">
                 <img
