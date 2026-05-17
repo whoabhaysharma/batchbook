@@ -1,12 +1,26 @@
+"use client";
+
 import type { Metadata } from "next";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/components/auth-provider";
 import { GoogleLoginButton } from "./google-login-button";
 
-export const metadata: Metadata = {
-  title: "Sign in",
-  description: "Sign in to BatchBook",
-};
-
 export default function LoginPage() {
+  const { user, profile, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (loading) return;
+    if (user) {
+      if (profile?.tuitionId) {
+        router.replace("/app");
+      } else {
+        router.replace("/setup");
+      }
+    }
+  }, [user, profile, loading, router]);
+
   return (
     <div className="relative flex min-h-svh flex-col overflow-hidden bg-[var(--app-bg)]">
       {/* 1. Deep Layered Background */}

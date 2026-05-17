@@ -8,7 +8,7 @@ import { useAuth } from "@/components/auth-provider";
 
 export default function SetupPage() {
   const router = useRouter();
-  const { user, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
   const [tuitionName, setTuitionName] = useState("");
   const [tuitionCode, setTuitionCode] = useState("");
   const [codeError, setCodeError] = useState("");
@@ -16,10 +16,13 @@ export default function SetupPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.replace("/u/login");
+    if (loading) return;
+    if (!user) {
+      router.replace("/login");
+    } else if (profile?.tuitionId) {
+      router.replace("/app");
     }
-  }, [loading, user, router]);
+  }, [loading, user, profile, router]);
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -60,7 +63,7 @@ export default function SetupPage() {
         tuitionCode
       );
 
-      router.push("/");
+      router.push("/app");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to setup tuition";
       setError(message);

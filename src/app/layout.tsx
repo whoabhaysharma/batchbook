@@ -36,7 +36,7 @@ export default function RootLayout({
       <body className={`${inter.variable} ${outfit.variable} antialiased`}>
         <FirebaseAnalytics />
         <AuthProvider>
-          <AppFrame>{children}</AppFrame>
+          {children}
         </AuthProvider>
       </body>
     </html>
