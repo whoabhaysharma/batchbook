@@ -22,6 +22,8 @@ import {
 } from "@/components/ui/select";
 import { Plus, UserPlus, X, ChevronDown, AlertCircle, Loader2 } from "lucide-react";
 import { getStudents, createStudent, getBatches, createEnrollment } from "@/lib/db";
+import { getFirebaseDb } from "@/lib/firebase";
+import { onSnapshot, query, collection, where } from "firebase/firestore";
 import { useAuth } from "@/components/auth-provider";
 import { type Batch } from "@/types/batch";
 import { type Student } from "@/types/student";
@@ -70,26 +72,34 @@ export default function StudentsPage() {
   };
 
   const fetchData = async () => {
-    setLoading(true);
     if (!profile?.tuitionId) return;
     try {
-      const [studentData, batchData] = await Promise.all([
-        getStudents(profile.tuitionId),
-        getBatches(profile.tuitionId)
-      ]);
-      setStudents(studentData);
+      const batchData = await getBatches(profile.tuitionId);
       setBatches(batchData);
     } catch (err) {
-      console.error("Error fetching students/batches data:", err);
-    } finally {
-      setLoading(false);
+      console.error("Error fetching batches data:", err);
     }
   };
 
   useEffect(() => {
-    if (profile?.tuitionId) {
-      fetchData();
-    }
+    if (!profile?.tuitionId) return;
+    
+    setLoading(true);
+    fetchData();
+
+    const db = getFirebaseDb();
+    const q = query(collection(db, "students"), where("tuitionId", "==", profile.tuitionId));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const studentData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
+      setStudents(studentData);
+      setLoading(false);
+    }, (err) => {
+      console.error("Error listening to students:", err);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, [profile?.tuitionId]);
 
   const handleCreateStudent = async () => {
