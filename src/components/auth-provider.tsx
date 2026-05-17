@@ -57,8 +57,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (loading) return;
 
     if (!user) {
-      if (pathname !== "/login") {
-        router.replace("/login");
+      if (pathname !== "/u/login") {
+        router.replace("/u/login");
       }
     } else {
       if (!profile?.tuitionId) {
@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           router.replace("/setup");
         }
       } else {
-        if (pathname === "/login" || pathname === "/setup") {
+        if (pathname === "/u/login" || pathname === "/login" || pathname === "/setup") {
           router.replace("/");
         }
       }
@@ -75,11 +75,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Prevent rendering protected content if we're redirecting
   const isRedirecting = 
-    (!user && pathname !== "/login") ||
+    (!user && pathname !== "/u/login" && pathname !== "/login") ||
     (user && !profile?.tuitionId && pathname !== "/setup") ||
     (user && profile?.tuitionId && (pathname === "/login" || pathname === "/setup"));
 
-  const shouldBlockUi = (loading && pathname !== "/login") || isRedirecting;
+  const shouldBlockUi = (loading && pathname !== "/u/login" && pathname !== "/login") || isRedirecting;
 
   return (
     <AuthContext.Provider value={{ user, profile, loading }}>

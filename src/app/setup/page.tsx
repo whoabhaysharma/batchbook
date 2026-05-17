@@ -17,7 +17,7 @@ export default function SetupPage() {
 
   useEffect(() => {
     if (!loading && !user) {
-      router.replace("/login");
+      router.replace("/u/login");
     }
   }, [loading, user, router]);
 
