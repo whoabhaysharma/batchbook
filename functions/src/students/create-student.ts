@@ -28,7 +28,7 @@ export const createStudent = functions.https.onCall(async (request) => {
       const nextSeq = (tuitionData.currentStudentSequence || 0) + 1;
       const tuitionCode = tuitionData.code;
 
-      const rollNumber = `${tuitionCode}-${nextSeq.toString().padStart(3, "0")}`;
+      const rollNumber = `${tuitionCode}${nextSeq.toString().padStart(3, "0")}`;
 
       const fullStudentData = {
         ...studentData,
