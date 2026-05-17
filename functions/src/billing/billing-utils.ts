@@ -8,10 +8,10 @@ export type { Student, SubjectEnrollment as Enrollment, Invoice };
  * Returns the current year, month, and YYYY-MM billing period code
  * formatted securely in Asia/Kolkata timezone.
  */
-export function getKolkataBillingPeriod(date: Date = new Date()): { 
-  billingPeriod: string; 
-  year: number; 
-  month: number; 
+export function getKolkataBillingPeriod(date: Date = new Date()): {
+  billingPeriod: string;
+  year: number;
+  month: number;
   rawKolkataDate: Date;
 } {
   const kolkataStr = date.toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
@@ -19,7 +19,7 @@ export function getKolkataBillingPeriod(date: Date = new Date()): {
   const year = rawKolkataDate.getFullYear();
   const month = rawKolkataDate.getMonth() + 1;
   const billingPeriod = `${year}-${month.toString().padStart(2, "0")}`;
-  
+
   return { billingPeriod, year, month, rawKolkataDate };
 }
 
