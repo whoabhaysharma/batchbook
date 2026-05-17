@@ -22,6 +22,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
+  // 1. Subscribe to auth state once on mount
   useEffect(() => {
     const auth = getFirebaseAuth();
     const db = getFirebaseDb();
@@ -30,40 +31,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(u);
       
       if (u) {
-        // Fetch profile
-        const profileDoc = await getDoc(doc(db, "users", u.uid));
-        if (profileDoc.exists()) {
-          const profileData = profileDoc.data() as UserProfile;
-          setProfile(profileData);
-          
-          if (!profileData.tuitionId && pathname !== "/setup") {
-            router.replace("/setup");
-          } else if (profileData.tuitionId && pathname === "/setup") {
-            router.replace("/");
+        try {
+          const profileDoc = await getDoc(doc(db, "users", u.uid));
+          if (profileDoc.exists()) {
+            setProfile(profileDoc.data() as UserProfile);
+          } else {
+            setProfile(null);
           }
-        } else {
+        } catch (error) {
+          console.error("Error loading user profile:", error);
           setProfile(null);
-          if (pathname !== "/setup") {
-            router.replace("/setup");
-          }
         }
       } else {
         setProfile(null);
-        if (pathname !== "/login") {
-          router.replace("/login");
-        }
       }
       
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, [pathname, router]);
+  }, []);
 
-  // Prevent rendering children if we're in the middle of a redirect
-  const isRedirecting = (user && !profile?.tuitionId && pathname !== "/setup") || 
-                        (!user && !loading && pathname !== "/login") ||
-                        (user && profile?.tuitionId && pathname === "/login");
+  // 2. Handle routing and redirects reactively
+  useEffect(() => {
+    if (loading) return;
+
+    if (!user) {
+      if (pathname !== "/login") {
+        router.replace("/login");
+      }
+    } else {
+      if (!profile?.tuitionId) {
+        if (pathname !== "/setup") {
+          router.replace("/setup");
+        }
+      } else {
+        if (pathname === "/login" || pathname === "/setup") {
+          router.replace("/");
+        }
+      }
+    }
+  }, [user, profile, loading, pathname, router]);
+
+  // Prevent rendering protected content if we're redirecting
+  const isRedirecting = 
+    (!user && pathname !== "/login") ||
+    (user && !profile?.tuitionId && pathname !== "/setup") ||
+    (user && profile?.tuitionId && (pathname === "/login" || pathname === "/setup"));
 
   return (
     <AuthContext.Provider value={{ user, profile, loading }}>
