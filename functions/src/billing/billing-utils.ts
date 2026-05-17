@@ -24,20 +24,11 @@ export function getKolkataBillingPeriod(date: Date = new Date()): {
 }
 
 /**
- * Determines whether a subject enrollment was active at a given invoice timestamp.
+ * Determines whether a subject enrollment is active.
+ * A subject is considered active if its status field is "active".
  */
 export function isEnrollmentActive(enrollment: any, invoiceTime: number): boolean {
-  if (!enrollment || !enrollment.startedAt) return false;
-  
-  const startedTime = enrollment.startedAt.toMillis 
-    ? enrollment.startedAt.toMillis() 
-    : new Date(enrollment.startedAt).getTime();
-  
-  const endedTime = enrollment.endedAt 
-    ? (enrollment.endedAt.toMillis ? enrollment.endedAt.toMillis() : new Date(enrollment.endedAt).getTime())
-    : null;
-
-  return startedTime <= invoiceTime && (endedTime === null || endedTime > invoiceTime);
+  return enrollment && enrollment.status === "active";
 }
 
 /**

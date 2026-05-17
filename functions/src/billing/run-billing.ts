@@ -39,7 +39,7 @@ async function billIndividualStudent(
     .get();
 
   const enrollments = enrollmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  
+
   // 3. Filter only active enrollments for today
   const activeEnrollments = getActiveEnrollments(enrollments, today.getTime());
   const totalAmount = activeEnrollments.reduce((acc, curr: any) => acc + (curr.monthlyFee || 0), 0);
@@ -91,11 +91,11 @@ export const runBillingJob = onRequest({ cors: true }, async (req, res) => {
     const today = new Date();
     const { billingPeriod: billingMonthId, rawKolkataDate: kolkataDate } = getKolkataBillingPeriod(today);
     const currentDay = kolkataDate.getDate();
-    
-    const billingMonthLabel = kolkataDate.toLocaleString("default", { 
-      month: "long", 
-      year: "numeric", 
-      timeZone: "Asia/Kolkata" 
+
+    const billingMonthLabel = kolkataDate.toLocaleString("default", {
+      month: "long",
+      year: "numeric",
+      timeZone: "Asia/Kolkata"
     });
 
     logger.info(`Starting Billing Sweep for ${billingMonthLabel} (Today: ${currentDay})`);
@@ -117,7 +117,7 @@ export const runBillingJob = onRequest({ cors: true }, async (req, res) => {
     for (const student of targetStudents) {
       try {
         const outcome = await billIndividualStudent(student, billingMonthId, billingMonthLabel, kolkataDate);
-        
+
         if (outcome.status === "created") {
           createdCount++;
           results.push({ name: student.name, status: "created", amount: outcome.amount });
