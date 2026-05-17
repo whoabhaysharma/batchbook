@@ -16,7 +16,10 @@ const tabs = [
 
 export function AppFrame({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const hideChrome = pathname === "/login" || pathname === "/u/login" || pathname === "/setup";
+  
+  // Use browser-level pathname to prevent hydration/pre-render lag flashes
+  const currentPath = typeof window !== "undefined" ? window.location.pathname : pathname;
+  const hideChrome = currentPath === "/login" || currentPath === "/setup" || currentPath.startsWith("/login") || currentPath.startsWith("/setup");
 
   if (hideChrome) {
     return <div className="min-h-svh bg-[#000000] text-white">{children}</div>;

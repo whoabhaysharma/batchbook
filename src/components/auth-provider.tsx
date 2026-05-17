@@ -22,6 +22,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
+  // Use browser-level pathname to prevent hydration/pre-render lag flashes
+  const currentPath = typeof window !== "undefined" ? window.location.pathname : pathname;
+
   // 1. Subscribe to auth state once on mount
   useEffect(() => {
     const auth = getFirebaseAuth();
@@ -56,17 +59,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (loading) return;
 
+    const path = typeof window !== "undefined" ? window.location.pathname : pathname;
+
     if (!user) {
-      if (pathname !== "/u/login") {
-        router.replace("/u/login");
+      if (path !== "/login") {
+        router.replace("/login");
       }
     } else {
       if (!profile?.tuitionId) {
-        if (pathname !== "/setup") {
+        if (path !== "/setup") {
           router.replace("/setup");
         }
       } else {
-        if (pathname === "/u/login" || pathname === "/login" || pathname === "/setup") {
+        if (path === "/login" || path === "/setup") {
           router.replace("/");
         }
       }
@@ -75,11 +80,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Prevent rendering protected content if we're redirecting
   const isRedirecting = 
-    (!user && pathname !== "/u/login" && pathname !== "/login") ||
-    (user && !profile?.tuitionId && pathname !== "/setup") ||
-    (user && profile?.tuitionId && (pathname === "/login" || pathname === "/setup"));
+    (!user && currentPath !== "/login") ||
+    (user && !profile?.tuitionId && currentPath !== "/setup") ||
+    (user && profile?.tuitionId && (currentPath === "/login" || currentPath === "/setup"));
 
-  const shouldBlockUi = (loading && pathname !== "/u/login" && pathname !== "/login") || isRedirecting;
+  const shouldBlockUi = (loading && currentPath !== "/login") || isRedirecting;
 
   return (
     <AuthContext.Provider value={{ user, profile, loading }}>
