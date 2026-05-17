@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { onAuthStateChanged, type User } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { getFirebaseAuth, getFirebaseDb } from "@/lib/firebase";
 import { UserProfile } from "@/types/user";
 
@@ -22,30 +22,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const auth = getFirebaseAuth();
     const db = getFirebaseDb();
+    let unsubscribeSnapshot: (() => void) | null = null;
     
-    const unsubscribe = onAuthStateChanged(auth, async (u) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (u) => {
       setUser(u);
       
+      // Clean up previous snapshot listener if user changes/signs out
+      if (unsubscribeSnapshot) {
+        unsubscribeSnapshot();
+        unsubscribeSnapshot = null;
+      }
+
       if (u) {
-        try {
-          const profileDoc = await getDoc(doc(db, "users", u.uid));
-          if (profileDoc.exists()) {
-            setProfile(profileDoc.data() as UserProfile);
-          } else {
+        // Subscribe to real-time user profile updates
+        unsubscribeSnapshot = onSnapshot(
+          doc(db, "users", u.uid),
+          (docSnap) => {
+            if (docSnap.exists()) {
+              setProfile(docSnap.data() as UserProfile);
+            } else {
+              setProfile(null);
+            }
+            setLoading(false);
+          },
+          (error) => {
+            console.error("Error watching user profile:", error);
             setProfile(null);
+            setLoading(false);
           }
-        } catch (error) {
-          console.error("Error loading user profile:", error);
-          setProfile(null);
-        }
+        );
       } else {
         setProfile(null);
+        setLoading(false);
       }
-      
-      setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeSnapshot) {
+        unsubscribeSnapshot();
+      }
+    };
   }, []);
 
   return (
