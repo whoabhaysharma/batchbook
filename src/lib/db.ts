@@ -485,3 +485,72 @@ export async function getPayments(): Promise<any[]> {
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
+
+export async function forceGenerateInvoice(
+  studentId: string,
+  tuitionId: string,
+  billingPeriod: string
+): Promise<string> {
+  const db = getFirebaseDb();
+  const ledgerId = `${studentId}_${billingPeriod}`;
+  const docRef = doc(db, "invoice", ledgerId);
+  const docSnap = await getDoc(docRef);
+
+  if (docSnap.exists()) {
+    throw new Error("Invoice already exists for this period.");
+  }
+
+  // Fetch student
+  const studentDoc = await getDoc(doc(db, "students", studentId));
+  if (!studentDoc.exists()) {
+    throw new Error("Student not found.");
+  }
+  const studentData = studentDoc.data() as Student;
+
+  // Fetch enrollments
+  const enrollmentsSnap = await getDocs(
+    query(collection(db, "subject_enrollments"), where("studentId", "==", studentId))
+  );
+  const enrollments = enrollmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+  const year = parseInt(billingPeriod.split("-")[0]);
+  const month = parseInt(billingPeriod.split("-")[1]) - 1;
+  const invoiceDate = new Date(year, month, studentData.billingDay || 1);
+
+  const activeEnrollments = enrollments.filter((e: any) =>
+    isEnrollmentActive({
+      startedAt: e.startedAt,
+      endedAt: e.endedAt,
+      invoiceTime: invoiceDate.getTime()
+    })
+  );
+
+  const totalAmount = activeEnrollments.reduce((acc, curr: any) => acc + (curr.monthlyFee || 0), 0);
+
+  if (totalAmount <= 0) {
+    throw new Error("No active subject enrollments found for this billing period.");
+  }
+
+  const newInvoiceData = {
+    studentId,
+    tuitionId,
+    billingPeriod,
+    dueDate: invoiceDate.getTime(),
+    amount: totalAmount,
+    paidAmount: 0,
+    remainingAmount: totalAmount,
+    subjects: activeEnrollments.map((e: any) => ({
+      enrollmentId: e.id || "",
+      subject: e.subject,
+      monthlyFee: e.monthlyFee
+    })),
+    status: "pending",
+    generatedFrom: "forced" as const,
+    remarks: `Forced manual invoice generation for ${billingPeriod}.`,
+    createdAt: serverTimestamp()
+  };
+
+  await setDoc(docRef, newInvoiceData);
+  return ledgerId;
+}
+

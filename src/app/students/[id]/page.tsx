@@ -3,11 +3,13 @@
 import { useState, useEffect } from "react";
 import { IconCalendar, IconCash, IconUsers, IconPlus } from "@/components/icons/dashboard-icons";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/auth-provider";
-import { getStudentById, getEnrollmentsByStudentId, updateStudent } from "@/lib/db";
+import { getStudentById, getEnrollmentsByStudentId, updateStudent, forceGenerateInvoice } from "@/lib/db";
 import { Student } from "@/types/student";
 import { SubjectEnrollment } from "@/types/enrollment";
 import { useParams } from "next/navigation";
+import { ChevronDown, ChevronUp, Wrench, Sparkles, CheckCircle2, AlertCircle } from "lucide-react";
 
 export default function StudentDetailPage() {
   const params = useParams();
@@ -22,6 +24,32 @@ export default function StudentDetailPage() {
   const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<"active" | "inactive" | "on-hold">("active");
   const [isUpdating, setIsUpdating] = useState(false);
+
+  // Force invoice generation states (not upfront)
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+  const [billingPeriodInput, setBillingPeriodInput] = useState(() => {
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = (today.getMonth() + 1).toString().padStart(2, "0");
+    return `${y}-${m}`;
+  });
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [genMessage, setGenMessage] = useState<{ text: string; isError: boolean } | null>(null);
+
+  const handleForceGenerate = async () => {
+    if (!student || !profile?.tuitionId) return;
+    setIsGenerating(true);
+    setGenMessage(null);
+    try {
+      await forceGenerateInvoice(student.id, profile.tuitionId, billingPeriodInput);
+      setGenMessage({ text: `Success! Invoice generated for ${billingPeriodInput}.`, isError: false });
+    } catch (err: any) {
+      console.error(err);
+      setGenMessage({ text: err.message || "Failed to forcefully generate invoice.", isError: true });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   useEffect(() => {
     setIsMounted(true);
@@ -198,12 +226,71 @@ export default function StudentDetailPage() {
           </div>
         </div>
 
+        {/* ── NOT-UPFRONT FORCE BILLING GENERATOR ── */}
+        {profile?.role === "owner" && (
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={() => setIsAdvancedOpen(!isAdvancedOpen)}
+              className="flex items-center justify-between px-6 py-4 rounded-2xl bg-[#0d0d0d] border border-white/5 shadow-[neu-pressed] text-[11px] font-black uppercase tracking-widest text-[#444444] active:scale-[0.99] transition-all outline-none"
+            >
+              <div className="flex items-center gap-2">
+                <Wrench className="h-3.5 w-3.5 text-[#444444]" />
+                Advanced Billing Admin
+              </div>
+              {isAdvancedOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
+
+            {isAdvancedOpen && (
+              <div className="card-cred p-6 flex flex-col gap-5 border border-dashed border-white/10 bg-black/20 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="flex flex-col gap-1.5">
+                  <h4 className="text-[12px] font-black text-white uppercase tracking-wider">Force Invoice Generation</h4>
+                  <p className="text-[10px] text-[#444444] font-semibold leading-normal">
+                    Instantly issue a deterministic invoice for any billing month. Bypasses billing day checks. Safe from duplicates.
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label className="text-[9px] font-black uppercase tracking-wider text-[#666666]">Billing Period (YYYY-MM)</label>
+                  <input
+                    type="text"
+                    value={billingPeriodInput}
+                    onChange={(e) => setBillingPeriodInput(e.target.value)}
+                    className="h-12 w-full rounded-xl bg-[#0d0d0d] border border-white/5 px-4 text-[13px] font-bold text-white outline-none focus:border-[var(--app-accent)]/20 transition-all"
+                    placeholder="e.g. 2026-08"
+                  />
+                </div>
+
+                {genMessage && (
+                  <div className={cn(
+                    "p-4 rounded-xl text-[11px] font-bold flex items-start gap-2.5 border",
+                    genMessage.isError 
+                      ? "bg-red-500/10 border-red-500/20 text-[#ff4d4d]" 
+                      : "bg-[var(--app-accent-soft)]/20 border-[var(--app-accent)]/20 text-[var(--app-accent)]"
+                  )}>
+                    {genMessage.isError ? <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" /> : <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />}
+                    <span>{genMessage.text}</span>
+                  </div>
+                )}
+
+                <button
+                  onClick={handleForceGenerate}
+                  disabled={isGenerating || !billingPeriodInput}
+                  className="h-12 w-full bg-[#111111] hover:bg-[#151515] active:scale-95 text-[10px] font-black uppercase tracking-widest text-white rounded-xl border border-white/5 shadow-[neu-raised] flex items-center justify-center gap-2 transition-all disabled:opacity-30 disabled:pointer-events-none"
+                >
+                  <Sparkles className="h-3.5 w-3.5 text-[var(--app-accent)]" />
+                  {isGenerating ? "Generating..." : "Generate Invoice Now"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
       </section>
 
       {/* 4. Actions Footer */}
       <footer className="px-8 flex flex-col gap-4">
-         <Link href={`/ledger?studentId=${student.id}`} className="h-16 w-full btn-neon text-[13px] uppercase tracking-[0.2em] flex items-center justify-center">
-           Manage Fee Ledger
+         <Link href="/payments" className="h-16 w-full btn-neon text-[13px] uppercase tracking-[0.2em] flex items-center justify-center">
+           Manage Finance Hub
          </Link>
          <button 
            onClick={() => {
