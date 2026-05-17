@@ -9,7 +9,7 @@ import {
   getStudentById, 
   getEnrollmentsByStudentId, 
   updateStudent, 
-  forceGenerateInvoice,
+  triggerManualInvoiceGeneration,
   getInvoicesByStudentId,
   getPaymentsByStudentId
 } from "@/lib/db";
@@ -38,12 +38,6 @@ export default function StudentDetailPage() {
 
   // Force invoice generation states (not upfront)
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
-  const [billingPeriodInput, setBillingPeriodInput] = useState(() => {
-    const today = new Date();
-    const y = today.getFullYear();
-    const m = (today.getMonth() + 1).toString().padStart(2, "0");
-    return `${y}-${m}`;
-  });
   const [isGenerating, setIsGenerating] = useState(false);
   const [genMessage, setGenMessage] = useState<{ text: string; isError: boolean } | null>(null);
 
@@ -52,14 +46,14 @@ export default function StudentDetailPage() {
     setIsGenerating(true);
     setGenMessage(null);
     try {
-      await forceGenerateInvoice(student.id, profile.tuitionId, billingPeriodInput);
-      setGenMessage({ text: `Success! Invoice generated for ${billingPeriodInput}.`, isError: false });
+      const generatedPeriod = await triggerManualInvoiceGeneration(student.id, profile.tuitionId);
+      setGenMessage({ text: `Success! Current cycle invoice generated for ${generatedPeriod}.`, isError: false });
       // Reload invoices list in real-time
       const updatedInvoices = await getInvoicesByStudentId(student.id);
       setInvoices(updatedInvoices);
     } catch (err: any) {
       console.error(err);
-      setGenMessage({ text: err.message || "Failed to forcefully generate invoice.", isError: true });
+      setGenMessage({ text: err.message || "Failed to trigger automated invoicing.", isError: true });
     } finally {
       setIsGenerating(false);
     }
@@ -362,21 +356,10 @@ export default function StudentDetailPage() {
             {isAdvancedOpen && (
               <div className="card-cred p-6 flex flex-col gap-5 border border-dashed border-white/10 bg-black/20 animate-in fade-in slide-in-from-top-2 duration-200">
                 <div className="flex flex-col gap-1.5">
-                  <h4 className="text-[12px] font-black text-white uppercase tracking-wider">Force Invoice Generation</h4>
-                  <p className="text-[10px] text-[#444444] font-semibold leading-normal">
-                    Instantly issue a deterministic invoice for any billing month. Bypasses billing day checks. Safe from duplicates.
+                  <h4 className="text-[12px] font-black text-white uppercase tracking-wider">Trigger Automated Invoicing</h4>
+                  <p className="text-[10px] text-[#555555] font-semibold leading-normal">
+                    Manually execute the background billing job for this student for the current month. If the invoice has already been issued, this will safely prevent duplication.
                   </p>
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <label className="text-[9px] font-black uppercase tracking-wider text-[#666666]">Billing Period (YYYY-MM)</label>
-                  <input
-                    type="text"
-                    value={billingPeriodInput}
-                    onChange={(e) => setBillingPeriodInput(e.target.value)}
-                    className="h-12 w-full rounded-xl bg-[#0d0d0d] border border-white/5 px-4 text-[13px] font-bold text-white outline-none focus:border-[var(--app-accent)]/20 transition-all"
-                    placeholder="e.g. 2026-08"
-                  />
                 </div>
 
                 {genMessage && (
@@ -393,11 +376,11 @@ export default function StudentDetailPage() {
 
                 <button
                   onClick={handleForceGenerate}
-                  disabled={isGenerating || !billingPeriodInput}
+                  disabled={isGenerating}
                   className="h-12 w-full bg-[#111111] hover:bg-[#151515] active:scale-95 text-[10px] font-black uppercase tracking-widest text-white rounded-xl border border-white/5 shadow-[neu-raised] flex items-center justify-center gap-2 transition-all disabled:opacity-30 disabled:pointer-events-none"
                 >
                   <Sparkles className="h-3.5 w-3.5 text-[var(--app-accent)]" />
-                  {isGenerating ? "Generating..." : "Generate Invoice Now"}
+                  {isGenerating ? "Triggering..." : "Trigger Billing Job Now"}
                 </button>
               </div>
             )}

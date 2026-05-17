@@ -564,6 +564,50 @@ export async function forceGenerateInvoice(
   return ledgerId;
 }
 
+export async function triggerManualInvoiceGeneration(
+  studentId: string,
+  tuitionId: string
+): Promise<string> {
+  const db = getFirebaseDb();
+
+  // 1. Fetch Student Details
+  const studentDoc = await getDoc(doc(db, "students", studentId));
+  if (!studentDoc.exists()) {
+    throw new Error("Student not found.");
+  }
+  const studentData = studentDoc.data() as Student;
+  const billingDay = studentData.billingDay || 1;
+  const billingPeriod = getCurrentBillingPeriod();
+
+  const currentLedgerId = `${studentId}_${billingPeriod}`;
+
+  // 2. Fetch all existing invoices
+  const q = query(collection(db, "invoice"), where("studentId", "==", studentId));
+  const snap = await getDocs(q);
+  let allInvoices = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Invoice));
+
+  const currentInvoiceExists = allInvoices.some(inv => inv.id === currentLedgerId);
+  if (currentInvoiceExists) {
+    throw new Error(`Invoice for the current period (${billingPeriod}) already exists.`);
+  }
+
+  if (studentData.status !== "active") {
+    throw new Error("Cannot trigger invoice generation for an inactive or on-hold student.");
+  }
+
+  // 3. Trigger lazy generate
+  await lazyGenerateCurrentInvoice(db, studentId, tuitionId, billingPeriod, billingDay, studentData, allInvoices);
+
+  // 4. Verify it generated successfully
+  const postGenSnap = await getDoc(doc(db, "invoice", currentLedgerId));
+  if (!postGenSnap.exists()) {
+    throw new Error("Job completed but no invoice was generated (verify the student has active subject enrollments for this month).");
+  }
+
+  return billingPeriod;
+}
+
+
 export async function getInvoicesByStudentId(studentId: string): Promise<Invoice[]> {
   const db = getFirebaseDb();
   const q = query(collection(db, "invoice"), where("studentId", "==", studentId));
