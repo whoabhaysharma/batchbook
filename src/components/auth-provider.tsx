@@ -79,9 +79,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     (user && !profile?.tuitionId && pathname !== "/setup") ||
     (user && profile?.tuitionId && (pathname === "/login" || pathname === "/setup"));
 
+  const shouldBlockUi = (loading && pathname !== "/login") || isRedirecting;
+
   return (
     <AuthContext.Provider value={{ user, profile, loading }}>
-      {(loading || isRedirecting) ? (
+      {shouldBlockUi ? (
         <div className="flex min-h-svh items-center justify-center bg-[#000000]">
            <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--app-accent)] border-t-transparent" />
         </div>

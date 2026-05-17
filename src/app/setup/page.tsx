@@ -2,32 +2,24 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { onAuthStateChanged, User } from "firebase/auth";
-import { getFirebaseAuth } from "@/lib/firebase";
 import { suggestTuitionCode, isTuitionCodeUnique, setupTuition } from "@/lib/tuition";
 import { IconCash } from "@/components/icons/dashboard-icons";
+import { useAuth } from "@/components/auth-provider";
 
 export default function SetupPage() {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
+  const { user, loading } = useAuth();
   const [tuitionName, setTuitionName] = useState("");
   const [tuitionCode, setTuitionCode] = useState("");
-  const [isCheckingCode, setIsCheckingCode] = useState(false);
   const [codeError, setCodeError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const auth = getFirebaseAuth();
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      if (!u) {
-        router.push("/login");
-      } else {
-        setUser(u);
-      }
-    });
-    return () => unsubscribe();
-  }, [router]);
+    if (!loading && !user) {
+      router.replace("/login");
+    }
+  }, [loading, user, router]);
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -69,16 +61,23 @@ export default function SetupPage() {
       );
 
       router.push("/");
-    } catch (err: any) {
-      setError(err.message || "Failed to setup tuition");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to setup tuition";
+      setError(message);
       setIsSubmitting(false);
     }
   };
 
-  if (!user) return null;
+  if (loading || !user) {
+    return (
+      <div className="flex min-h-svh items-center justify-center bg-[#000000]">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--app-accent)] border-t-transparent" />
+      </div>
+    );
+  }
 
   return (
-    <div className="flex min-h-svh flex-col bg-[var(--app-bg)] px-8 pt-20">
+    <div className="flex min-h-svh flex-col bg-[var(--app-bg)] px-5 sm:px-8 pt-[calc(2.25rem+var(--safe-top))] sm:pt-20 pb-[calc(1.25rem+var(--safe-bottom))]">
       <header className="flex flex-col gap-2 mb-10">
         <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#333333]">
           Onboarding
@@ -91,7 +90,7 @@ export default function SetupPage() {
         </p>
       </header>
 
-      <form onSubmit={validateAndSubmit} className="flex flex-col gap-8">
+      <form onSubmit={validateAndSubmit} className="flex flex-col gap-8 max-w-md w-full">
         <div className="flex flex-col gap-2">
           <label className="text-[11px] font-black uppercase tracking-[0.2em] text-[#444444] px-1">
             Tuition Name

@@ -24,14 +24,14 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-svh flex-col bg-[#000000] text-white">
-      <main className="flex-1 pb-28">
+      <main className="flex-1 pb-[calc(7.5rem+var(--safe-bottom))]">
         <div className="mx-auto w-full max-w-md">{children}</div>
       </main>
 
       {/* CRED-style Floating Bottom Navigation */}
-      <div className="fixed inset-x-0 bottom-8 z-50 flex justify-center px-8 pointer-events-none">
+      <div className="fixed inset-x-0 bottom-[calc(1rem+var(--safe-bottom))] z-50 flex justify-center px-4 sm:px-8 pointer-events-none">
         <nav
-          className="pointer-events-auto flex h-18 w-full max-w-sm items-center justify-around rounded-[2rem] bg-[#111111] border border-white/5 shadow-[0_20px_40px_rgba(0,0,0,0.8)] px-2"
+          className="pointer-events-auto flex h-18 w-full max-w-sm items-center justify-around rounded-[2rem] bg-[#111111] border border-white/5 shadow-[0_20px_40px_rgba(0,0,0,0.8)] px-1.5 sm:px-2"
           aria-label="Main tabs"
         >
           {tabs.map(({ href, label, match, Icon }) => {

@@ -23,6 +23,10 @@
   --neu-raised: 8px 8px 16px #050505, -8px -8px 16px #151515;
   --neu-pressed: inset 6px 6px 12px #050505, inset -6px -6px 12px #151515;
   --glass-bg: rgba(20, 20, 20, 0.7);
+
+  /* Mobile safe area helpers (iOS + Android gesture nav) */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 @theme inline {
@@ -83,5 +87,4 @@ body {
 ::-webkit-scrollbar {
   display: none;
 }
-
 

@@ -21,7 +21,7 @@ export default function LoginPage() {
         <div className="absolute inset-4 rounded-full border border-white/[0.02]" />
       </div>
 
-      <div className="relative z-10 flex flex-1 flex-col px-10 py-20">
+      <div className="relative z-10 flex flex-1 flex-col px-5 sm:px-10 pt-[calc(2.5rem+var(--safe-top))] pb-[calc(1.25rem+var(--safe-bottom))] sm:py-20">
         {/* 3. Hero Branding */}
         <div className="flex flex-1 flex-col items-center justify-center text-center">
           <div className="relative group">
@@ -32,12 +32,12 @@ export default function LoginPage() {
           </div>
           
           <div className="mt-12 flex flex-col gap-3">
-            <h1 className="text-5xl font-extrabold tracking-tighter text-white">
+            <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tighter text-white">
               BatchBook
             </h1>
             <div className="flex items-center justify-center gap-3">
               <div className="h-[1px] w-4 bg-[#222222]" />
-              <p className="text-[10px] font-black uppercase tracking-[0.6em] text-[#555555]">
+              <p className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.45em] sm:tracking-[0.6em] text-[#555555]">
                 PREMIER ACCESS
               </p>
               <div className="h-[1px] w-4 bg-[#222222]" />
@@ -46,9 +46,9 @@ export default function LoginPage() {
         </div>
 
         {/* 4. Glassmorphic Action Card */}
-        <div className="mt-auto flex flex-col gap-12">
+        <div className="mt-auto flex flex-col gap-8 sm:gap-12">
           <div className="p-1 rounded-[2rem] bg-gradient-to-b from-white/10 to-transparent">
-            <div className="bg-[#0d0d0d]/40 backdrop-blur-3xl rounded-[1.9rem] p-8 flex flex-col gap-6 border border-white/5 shadow-2xl">
+            <div className="bg-[#0d0d0d]/40 backdrop-blur-3xl rounded-[1.9rem] p-6 sm:p-8 flex flex-col gap-6 border border-white/5 shadow-2xl">
               <div className="flex flex-col gap-2">
                 <h2 className="text-lg font-bold text-white/90">Welcome back</h2>
                 <p className="text-[13px] font-medium text-[#444444]">Sign in to manage your tuition center</p>
@@ -68,5 +68,4 @@ export default function LoginPage() {
     </div>
   );
 }
-
 
