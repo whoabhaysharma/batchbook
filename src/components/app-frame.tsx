@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { IconCash, IconGrid, IconHome, IconMore, IconPeople } from "@/components/icons/tab-icons";
+import { IconFinance, IconGrid, IconHome, IconMore, IconPeople } from "@/components/icons/tab-icons";
 
 const tabs = [
   { href: "/", label: "Home", match: (p: string) => p === "/", Icon: IconHome },
   { href: "/batches", label: "Batches", match: (p: string) => p.startsWith("/batches"), Icon: IconGrid },
-  { href: "/ledger", label: "Ledger", match: (p: string) => p.startsWith("/ledger"), Icon: IconCash },
+  { href: "/payments", label: "Finance", match: (p: string) => p.startsWith("/payments") || p.startsWith("/ledger"), Icon: IconFinance },
   { href: "/students", label: "Students", match: (p: string) => p.startsWith("/students"), Icon: IconPeople },
   { href: "/more", label: "More", match: (p: string) => p.startsWith("/more"), Icon: IconMore },
 ] as const;
@@ -67,6 +67,3 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
-
-
-

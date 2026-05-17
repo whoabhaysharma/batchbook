@@ -478,3 +478,10 @@ export async function recordAdHocPayment(payment: {
 }): Promise<void> {
   await recordStudentPayment(payment.studentId, payment.tuitionId, payment.amount, payment.remarks);
 }
+
+export async function getPayments(): Promise<any[]> {
+  const db = getFirebaseDb();
+  const q = query(collection(db, "payments"), orderBy("paymentDate", "desc"));
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
