@@ -1,41 +1,8 @@
-export interface Enrollment {
-  id?: string;
-  subject: string;
-  monthlyFee: number;
-  startedAt: any;
-  endedAt: any;
-  studentId: string;
-  tuitionId: string;
-}
+import type { Student } from "../../../src/types/student";
+import type { SubjectEnrollment } from "../../../src/types/enrollment";
+import type { Invoice } from "../../../src/types/invoice";
 
-export interface Student {
-  id: string;
-  name: string;
-  tuitionId: string;
-  billingDay?: number;
-  billingActiveFrom?: string;
-  status: "active" | "inactive" | "on-hold";
-}
-
-export interface Invoice {
-  id: string;
-  studentId: string;
-  tuitionId: string;
-  billingPeriod: string;
-  dueDate: number;
-  amount: number;
-  paidAmount: number;
-  remainingAmount: number;
-  subjects: Array<{
-    enrollmentId: string;
-    subject: string;
-    monthlyFee: number;
-  }>;
-  status: "pending" | "partial" | "paid" | "cancelled";
-  generatedFrom: "lazy" | "cron" | "forced";
-  remarks?: string;
-  createdAt?: any;
-}
+export type { Student, SubjectEnrollment as Enrollment, Invoice };
 
 /**
  * Returns the current year, month, and YYYY-MM billing period code
