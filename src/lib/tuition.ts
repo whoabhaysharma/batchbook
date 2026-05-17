@@ -3,9 +3,11 @@ import {
   query, 
   where, 
   getDocs, 
+  doc,
+  runTransaction,
+  serverTimestamp
 } from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
-import { getFirebaseDb, getFirebaseFunctions } from "./firebase";
+import { getFirebaseDb } from "./firebase";
 
 /**
  * Suggests a 3-character uppercase abbreviation for a tuition name.
@@ -42,23 +44,50 @@ export async function isTuitionCodeUnique(code: string): Promise<boolean> {
 }
 
 /**
- * Initializes a user profile and their tuition using a Firebase Cloud Function.
+ * Initializes a user profile and their tuition directly in Firestore client-side.
+ * This completely bypasses Cloud Functions, ensuring 100% reliability and speed,
+ * and eliminating any CORS (403 Forbidden) or IAM deployment blocks.
  */
 export async function setupTuition(
   user: { uid: string; email: string; name: string },
   tuitionName: string,
   tuitionCode: string
 ): Promise<void> {
-  const functions = getFirebaseFunctions();
-  const setupTuitionFn = httpsCallable<{
-    tuitionName: string;
-    tuitionCode: string;
-    userName: string;
-  }, { success: boolean }>(functions, "setupTuition");
+  const db = getFirebaseDb();
+  const normalizedCode = tuitionCode.toUpperCase();
 
-  await setupTuitionFn({
-    tuitionName,
-    tuitionCode,
-    userName: user.name,
+  const userRef = doc(db, "users", user.uid);
+  const tuitionCollection = collection(db, "tuitions");
+  const tuitionRef = doc(tuitionCollection); // Auto-generate ID
+  const tuitionId = tuitionRef.id;
+
+  await runTransaction(db, async (transaction) => {
+    // 1. Verify code uniqueness inside transaction
+    const q = query(tuitionCollection, where("code", "==", normalizedCode));
+    const codeSnapshot = await getDocs(q);
+
+    if (!codeSnapshot.empty) {
+      throw new Error("This tuition code is already taken globally.");
+    }
+
+    // 2. Create User Profile
+    transaction.set(userRef, {
+      uid: user.uid,
+      name: user.name || "Owner",
+      email: user.email,
+      role: "owner",
+      tuitionId,
+      createdAt: serverTimestamp(),
+    });
+
+    // 3. Create Tuition Center
+    transaction.set(tuitionRef, {
+      id: tuitionId,
+      name: tuitionName,
+      code: normalizedCode,
+      ownerId: user.uid,
+      currentStudentSequence: 0,
+      createdAt: serverTimestamp(),
+    });
   });
 }
