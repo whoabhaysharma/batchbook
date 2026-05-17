@@ -21,7 +21,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, UserPlus, X, ChevronDown, AlertCircle, Loader2 } from "lucide-react";
-import { getStudents, createStudent, getBatches, createEnrollment } from "@/lib/db";
+import { getStudents, getBatches, createEnrollment } from "@/lib/db";
+import { createStudent as createStudentCallable } from "@/lib/students";
 import { getFirebaseDb } from "@/lib/firebase";
 import { onSnapshot, query, collection, where } from "firebase/firestore";
 import { useAuth } from "@/components/auth-provider";
@@ -113,7 +114,7 @@ export default function StudentsPage() {
       const m = (today.getMonth() + 1).toString().padStart(2, "0");
       const currentPeriod = `${y}-${m}`;
 
-      const studentId = await createStudent({
+      const studentResult = await createStudentCallable(profile.tuitionId, {
         name: newStudentName,
         phone: newStudentPhone || undefined,
         batch: newStudentBatch,
@@ -123,6 +124,7 @@ export default function StudentsPage() {
         tuitionId: profile.tuitionId,
         avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${newStudentName}`,
       });
+      const studentId = studentResult.id;
 
       // 2. Create Normalized Subject Enrollments (The Source of Truth)
       const enrollmentPromises = selectedSubjects.map(s => 
