@@ -17,9 +17,33 @@ async function seed() {
   console.log("🌱 Seeding data...");
 
   const batches = [
-    { name: "Morning STEM", id: "B-001", students: 24, status: "ACTIVE", time: "08:00 AM", color: "from-emerald-500/20" },
-    { name: "Weekend Bio", id: "B-002", students: 18, status: "PENDING", time: "10:30 AM", color: "from-blue-500/20" },
-    { name: "IELTS Evening", id: "B-003", students: 32, status: "ACTIVE", time: "05:00 PM", color: "from-purple-500/20" },
+    { 
+      name: "Morning STEM", 
+      id: "B-001", 
+      students: 24, 
+      status: "ACTIVE", 
+      startTime: { hour: 8, minute: 0, period: "AM" },
+      endTime: { hour: 10, minute: 0, period: "AM" },
+      color: "from-emerald-500/20" 
+    },
+    { 
+      name: "Weekend Bio", 
+      id: "B-002", 
+      students: 18, 
+      status: "PENDING", 
+      startTime: { hour: 10, minute: 30, period: "AM" },
+      endTime: { hour: 12, minute: 30, period: "PM" },
+      color: "from-blue-500/20" 
+    },
+    { 
+      name: "IELTS Evening", 
+      id: "B-003", 
+      students: 32, 
+      status: "ACTIVE", 
+      startTime: { hour: 5, minute: 0, period: "PM" },
+      endTime: { hour: 7, minute: 0, period: "PM" },
+      color: "from-purple-500/20" 
+    },
   ];
 
   const students = [

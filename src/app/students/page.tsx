@@ -58,8 +58,7 @@ export default function StudentsPage() {
     if (!customSubjectName || !customSubjectPrice || !profile?.tuitionId) return;
     setSelectedSubjects([...selectedSubjects, {
       name: customSubjectName,
-      price: Number(customSubjectPrice),
-      tuitionId: profile.tuitionId
+      price: Number(customSubjectPrice)
     }]);
 
     setCustomSubjectName("");

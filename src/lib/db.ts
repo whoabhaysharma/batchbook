@@ -41,18 +41,45 @@ export async function getEnrollmentsByStudentId(studentId: string): Promise<Subj
 
 
 
-export async function getBatches(): Promise<Batch[]> {
+export async function getTuition(id: string) {
   const db = getFirebaseDb();
-  const q = query(collection(db, "batches"), orderBy("createdAt", "desc"));
+  const docRef = doc(db, "tuitions", id);
+  const docSnap = await getDoc(docRef);
+  if (docSnap.exists()) {
+    return { id: docSnap.id, ...docSnap.data() };
+  }
+  return null;
+}
+
+export async function getBatches(tuitionId?: string): Promise<Batch[]> {
+  const db = getFirebaseDb();
+  let q = query(collection(db, "batches"), orderBy("createdAt", "desc"));
+  if (tuitionId) {
+    q = query(collection(db, "batches"), where("tuitionId", "==", tuitionId), orderBy("createdAt", "desc"));
+  }
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Batch));
 }
 
-export async function getStudents(): Promise<Student[]> {
+export async function getStudents(tuitionId?: string): Promise<Student[]> {
   const db = getFirebaseDb();
-  const q = query(collection(db, "students"), orderBy("createdAt", "desc"));
+  let q = query(collection(db, "students"), orderBy("createdAt", "desc"));
+  if (tuitionId) {
+    q = query(collection(db, "students"), where("tuitionId", "==", tuitionId), orderBy("createdAt", "desc"));
+  }
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Student));
+}
+
+export async function getPendingDues(tuitionId: string): Promise<number> {
+  const db = getFirebaseDb();
+  const q = query(
+    collection(db, "ledger"),
+    where("tuitionId", "==", tuitionId),
+    where("status", "in", ["pending", "overdue"])
+  );
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.reduce((acc, doc) => acc + (doc.data().amount || 0), 0);
 }
 
 export async function getStudentById(id: string): Promise<Student | null> {
@@ -107,4 +134,58 @@ export async function updateLedgerStatus(id: string, updates: Partial<FeeLedger>
     ...updates,
     updatedAt: serverTimestamp(),
   });
+}
+export async function getMonthlyRevenue(tuitionId: string, billingMonth: string): Promise<number> {
+  const db = getFirebaseDb();
+  const q = query(
+    collection(db, "ledger"),
+    where("tuitionId", "==", tuitionId),
+    where("billingMonth", "==", billingMonth)
+  );
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.reduce((acc, doc) => acc + (doc.data().amount || 0), 0);
+}
+
+export async function getRevenueHistory(tuitionId: string): Promise<{ month: string, amount: number }[]> {
+  const db = getFirebaseDb();
+  const q = query(
+    collection(db, "ledger"),
+    where("tuitionId", "==", tuitionId),
+    orderBy("createdAt", "asc")
+  );
+  const querySnapshot = await getDocs(q);
+  
+  const history: Record<string, number> = {};
+  querySnapshot.docs.forEach(doc => {
+    const data = doc.data();
+    const month = data.billingMonth;
+    if (month) {
+      history[month] = (history[month] || 0) + (data.amount || 0);
+    }
+  });
+
+  return Object.entries(history).map(([month, amount]) => ({ month, amount }));
+}
+
+export async function getPaymentStats(tuitionId: string): Promise<{ status: string, count: number, amount: number }[]> {
+  const db = getFirebaseDb();
+  const q = query(collection(db, "ledger"), where("tuitionId", "==", tuitionId));
+  const querySnapshot = await getDocs(q);
+  
+  const stats: Record<string, { count: number, amount: number }> = {
+    paid: { count: 0, amount: 0 },
+    pending: { count: 0, amount: 0 },
+    overdue: { count: 0, amount: 0 },
+  };
+
+  querySnapshot.docs.forEach(doc => {
+    const data = doc.data();
+    const status = data.status;
+    if (stats[status]) {
+      stats[status].count++;
+      stats[status].amount += (data.amount || 0);
+    }
+  });
+
+  return Object.entries(stats).map(([status, val]) => ({ status, ...val }));
 }

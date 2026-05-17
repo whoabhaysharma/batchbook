@@ -37,38 +37,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setProfile(profileData);
           
           if (!profileData.tuitionId && pathname !== "/setup") {
-            router.push("/setup");
+            router.replace("/setup");
+          } else if (profileData.tuitionId && pathname === "/setup") {
+            router.replace("/");
           }
         } else {
           setProfile(null);
           if (pathname !== "/setup") {
-            router.push("/setup");
+            router.replace("/setup");
           }
         }
       } else {
         setProfile(null);
+        if (pathname !== "/login") {
+          router.replace("/login");
+        }
       }
       
       setLoading(false);
-      
-      // Basic Redirect logic
-      if (!u && pathname !== "/login") {
-        router.push("/login");
-      } else if (u && pathname === "/login") {
-        router.push("/");
-      }
     });
 
     return () => unsubscribe();
   }, [pathname, router]);
 
+  // Prevent rendering children if we're in the middle of a redirect
+  const isRedirecting = (user && !profile?.tuitionId && pathname !== "/setup") || 
+                        (!user && !loading && pathname !== "/login") ||
+                        (user && profile?.tuitionId && pathname === "/login");
+
   return (
     <AuthContext.Provider value={{ user, profile, loading }}>
-      {!loading ? children : (
+      {(loading || isRedirecting) ? (
         <div className="flex min-h-svh items-center justify-center bg-[#000000]">
            <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--app-accent)] border-t-transparent" />
         </div>
-      )}
+      ) : children}
     </AuthContext.Provider>
   );
 }

@@ -6,7 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "build:functions": "npm --prefix functions run build",
+    "watch:functions": "npm --prefix functions run build:watch",
+    "emulators": "npm run build:functions && firebase emulators:start",
+    "db:seed": "npx tsx seed.ts",
+    "dev:all": "concurrently -k -s first -n \"Next,Func,Emul\" -c \"cyan,magenta,yellow\" \"npm run dev\" \"npm run watch:functions\" \"npx firebase emulators:start\""
   },
   "dependencies": {
     "@radix-ui/react-select": "^2.2.6",
@@ -16,6 +21,7 @@
     "next": "16.2.6",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "recharts": "^3.8.1",
     "tailwind-merge": "^3.6.0",
     "vaul": "^1.1.2"
   },
@@ -24,9 +30,11 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^9.2.1",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "tailwindcss": "^4",
+    "tsx": "^4.22.1",
     "typescript": "^5"
   }
 }
