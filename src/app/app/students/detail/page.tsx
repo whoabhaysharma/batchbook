@@ -16,13 +16,10 @@ import {
 import { Student } from "@/types/student";
 import { SubjectEnrollment } from "@/types/enrollment";
 import { Invoice } from "@/types/invoice";
-import { useParams } from "next/navigation";
 import { formatPeriod } from "@/lib/utils";
 import { ChevronDown, ChevronUp, Wrench, Sparkles, CheckCircle2, AlertCircle } from "lucide-react";
 
 export default function StudentDetailPage() {
-  const params = useParams();
-  const id = params?.id as string;
   const { profile } = useAuth();
   const [isMounted, setIsMounted] = useState(false);
   const [student, setStudent] = useState<Student | null>(null);
@@ -70,15 +67,22 @@ export default function StudentDetailPage() {
 
   useEffect(() => {
     setIsMounted(true);
-    if (!id) return;
+    
+    const searchParams = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+    const qId = searchParams.get("id");
+    
+    if (!qId) {
+      setLoading(false);
+      return;
+    }
     
     const fetchStudentData = async () => {
       try {
         const [studentData, enrollmentData, invoicesData, paymentsData] = await Promise.all([
-          getStudentById(id),
-          getEnrollmentsByStudentId(id),
-          getInvoicesByStudentId(id),
-          getPaymentsByStudentId(id)
+          getStudentById(qId),
+          getEnrollmentsByStudentId(qId),
+          getInvoicesByStudentId(qId),
+          getPaymentsByStudentId(qId)
         ]);
         setStudent(studentData);
         setEnrollments(enrollmentData);
@@ -91,7 +95,7 @@ export default function StudentDetailPage() {
       }
     };
     fetchStudentData();
-  }, [id]);
+  }, []);
 
   const totalFee = enrollments.reduce((acc, curr) => acc + curr.monthlyFee, 0);
 
