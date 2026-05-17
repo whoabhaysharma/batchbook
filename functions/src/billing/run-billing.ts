@@ -25,8 +25,12 @@ export const runBillingJob = onRequest({ cors: true }, async (req, res) => {
 
     const students = studentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-    // 2. Filter students whose billing day has arrived or passed
-    const targetStudents = students.filter((s: any) => s.billingDay <= currentDay);
+    // 2. Filter students based on billing day and billing active period
+    const targetStudents = students.filter((s: any) => {
+      if (s.billingDay > currentDay) return false;
+      if (s.billingActiveFrom && billingMonthId < s.billingActiveFrom) return false;
+      return true;
+    });
 
     const results: any[] = [];
     let createdCount = 0;
@@ -34,7 +38,7 @@ export const runBillingJob = onRequest({ cors: true }, async (req, res) => {
     for (const student of targetStudents as any[]) {
       // 3. Check if bill already exists for this month using the deterministic ledger ID
       const ledgerId = `${student.id}_${billingMonthId}`;
-      const ledgerDocRef = db.collection("ledger").doc(ledgerId);
+      const ledgerDocRef = db.collection("invoice").doc(ledgerId);
       const ledgerDocSnap = await ledgerDocRef.get();
 
       if (!ledgerDocSnap.exists) {

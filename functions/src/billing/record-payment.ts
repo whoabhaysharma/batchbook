@@ -59,11 +59,11 @@ export const recordPayment = functions.https.onCall(async (request) => {
 
       // 6. Check if current ledger invoice exists
       const currentLedgerId = `${studentId}_${billingPeriod}`;
-      const currentLedgerRef = db.collection("ledger").doc(currentLedgerId);
+      const currentLedgerRef = db.collection("invoice").doc(currentLedgerId);
       const currentLedgerSnap = await transaction.get(currentLedgerRef);
 
       // Fetch all unpaid ledgers ("pending", "partial")
-      const unpaidLedgersSnap = await db.collection("ledger")
+      const unpaidLedgersSnap = await db.collection("invoice")
         .where("studentId", "==", studentId)
         .where("status", "in", ["pending", "partial"])
         .get();
@@ -72,7 +72,10 @@ export const recordPayment = functions.https.onCall(async (request) => {
       const currentInvoiceExists = currentLedgerSnap.exists || unpaidInvoices.some(inv => inv.id === currentLedgerId);
 
       // 7. Ensure Current Ledger Exists (Lazy generate current month if missing)
-      if (!currentInvoiceExists) {
+      const isCurrentActive = studentData.status === "active";
+      const isCurrentPeriodActive = !studentData.billingActiveFrom || billingPeriod >= studentData.billingActiveFrom;
+
+      if (!currentInvoiceExists && isCurrentActive && isCurrentPeriodActive) {
         const invoiceDate = new Date(year, today.getMonth(), billingDay);
         const activeEnrollments = enrollments.filter((e: any) => {
           const startedTime = e.startedAt?.toMillis ? e.startedAt.toMillis() : new Date(e.startedAt).getTime();
@@ -131,7 +134,7 @@ export const recordPayment = functions.https.onCall(async (request) => {
         const updatedRemaining = invoice.amount - updatedPaid;
         const updatedStatus = updatedRemaining === 0 ? "paid" : "partial";
 
-        const invoiceRef = db.collection("ledger").doc(invoice.id);
+        const invoiceRef = db.collection("invoice").doc(invoice.id);
         transaction.update(invoiceRef, {
           paidAmount: updatedPaid,
           remainingAmount: updatedRemaining,
@@ -154,7 +157,7 @@ export const recordPayment = functions.https.onCall(async (request) => {
       // 9. Handle Future Overpayment Lazy Generation
       if (remainingPayment > 0) {
         // Fetch all ledger docs to locate newest period in history
-        const allLedgerSnap = await db.collection("ledger")
+        const allLedgerSnap = await db.collection("invoice")
           .where("studentId", "==", studentId)
           .get();
         const allInvoices = allLedgerSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
@@ -170,6 +173,15 @@ export const recordPayment = functions.https.onCall(async (request) => {
             fYear++;
           }
           const futurePeriod = `${fYear}-${fMonth.toString().padStart(2, "0")}`;
+
+          // Validate rules: status must be active and target period >= billingActiveFrom
+          const isFutureActive = studentData.status === "active";
+          const isFuturePeriodActive = !studentData.billingActiveFrom || futurePeriod >= studentData.billingActiveFrom;
+
+          if (!isFutureActive || !isFuturePeriodActive) {
+            break; // Stop future generation loop
+          }
+
           const futureInvoiceDate = new Date(fYear, fMonth - 1, billingDay);
 
           // Get active subject snapshot for this future period
@@ -206,7 +218,7 @@ export const recordPayment = functions.https.onCall(async (request) => {
               createdAt: FieldValue.serverTimestamp(),
             };
 
-            const futureLedgerRef = db.collection("ledger").doc(ledgerId);
+            const futureLedgerRef = db.collection("invoice").doc(ledgerId);
             transaction.set(futureLedgerRef, newInvoiceData);
 
             allocations.push({

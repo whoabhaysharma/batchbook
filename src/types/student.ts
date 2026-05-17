@@ -12,6 +12,7 @@ export interface Student {
   guardianName?: string;
   guardianPhone?: string;
   billingDay: number;
+  billingActiveFrom?: string; // Format: YYYY-MM
   remarks?: string;
   createdAt: number;
 }

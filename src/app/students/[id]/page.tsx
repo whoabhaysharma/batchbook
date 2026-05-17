@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { IconCalendar, IconCash, IconUsers, IconPlus } from "@/components/icons/dashboard-icons";
 import Link from "next/link";
 import { useAuth } from "@/components/auth-provider";
-import { getStudentById, getEnrollmentsByStudentId } from "@/lib/db";
+import { getStudentById, getEnrollmentsByStudentId, updateStudent } from "@/lib/db";
 import { Student } from "@/types/student";
 import { SubjectEnrollment } from "@/types/enrollment";
 import { useParams } from "next/navigation";
@@ -17,6 +17,11 @@ export default function StudentDetailPage() {
   const [student, setStudent] = useState<Student | null>(null);
   const [enrollments, setEnrollments] = useState<SubjectEnrollment[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Status management modal states
+  const [isStatusModalOpen, setIsStatusModalOpen] = useState(false);
+  const [selectedStatus, setSelectedStatus] = useState<"active" | "inactive" | "on-hold">("active");
+  const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -40,6 +45,34 @@ export default function StudentDetailPage() {
   }, [id]);
 
   const totalFee = enrollments.reduce((acc, curr) => acc + curr.monthlyFee, 0);
+
+  const handleUpdateStatus = async () => {
+    if (!student) return;
+    setIsUpdating(true);
+    try {
+      const updates: any = { status: selectedStatus };
+      
+      // Reactivation rules if transitioning to active
+      if (selectedStatus === "active" && student.status !== "active") {
+        const today = new Date();
+        const currentBillingDay = Math.min(today.getDate(), 28);
+        const y = today.getFullYear();
+        const m = (today.getMonth() + 1).toString().padStart(2, "0");
+        const currentBillingPeriod = `${y}-${m}`;
+
+        updates.billingDay = currentBillingDay;
+        updates.billingActiveFrom = currentBillingPeriod;
+      }
+
+      await updateStudent(student.id, updates);
+      setStudent(prev => prev ? { ...prev, ...updates } : null);
+      setIsStatusModalOpen(false);
+    } catch (err) {
+      console.error("Failed to update status:", err);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
 
 
@@ -91,8 +124,14 @@ export default function StudentDetailPage() {
            <span className="text-[9px] font-black uppercase tracking-widest text-[#444444]">Batch</span>
            <p className="text-[15px] font-extrabold text-white">{student.batch}</p>
         </div>
-        <div className="card-cred p-6 flex flex-col gap-2">
-           <span className="text-[9px] font-black uppercase tracking-widest text-[#444444]">Status</span>
+        <div 
+          onClick={() => {
+            setSelectedStatus(student.status);
+            setIsStatusModalOpen(true);
+          }}
+          className="card-cred p-6 flex flex-col gap-2 cursor-pointer hover:border-[var(--app-accent)]/25 active:scale-[0.98] transition-all group"
+        >
+           <span className="text-[9px] font-black uppercase tracking-widest text-[#444444] group-hover:text-[var(--app-accent)] transition-all">Status</span>
            <p className="text-[15px] font-extrabold text-[var(--app-accent)] uppercase">{student.status}</p>
         </div>
       </div>
@@ -166,10 +205,83 @@ export default function StudentDetailPage() {
          <Link href={`/ledger?studentId=${student.id}`} className="h-16 w-full btn-neon text-[13px] uppercase tracking-[0.2em] flex items-center justify-center">
            Manage Fee Ledger
          </Link>
-         <button className="h-16 w-full card-cred flex items-center justify-center text-[13px] uppercase tracking-[0.2em] text-[#666666] font-black border-dashed border-white/10">
-           Edit Profile
+         <button 
+           onClick={() => {
+             setSelectedStatus(student.status);
+             setIsStatusModalOpen(true);
+           }}
+           className="h-16 w-full card-cred flex items-center justify-center text-[13px] uppercase tracking-[0.2em] text-white/70 hover:text-white hover:border-white/20 transition-all font-black border-dashed border-white/10 active:scale-[0.98]"
+         >
+           Manage Student Status
          </button>
       </footer>
+
+      {/* Edit Status Modal */}
+      {isStatusModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md transition-all duration-300">
+          <div className="w-full max-w-md p-8 rounded-[2.5rem] bg-[#0d0d0d] border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.8)] flex flex-col gap-6 relative animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex flex-col gap-2">
+              <h3 className="text-xl font-black text-white">Manage Student Status</h3>
+              <p className="text-[11px] font-black text-[#555] uppercase tracking-wider">
+                Control active billing state & status
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <label className="text-[10px] font-black uppercase text-[#666] tracking-widest">Select Status</label>
+              <div className="grid grid-cols-3 gap-3">
+                {(["active", "on-hold", "inactive"] as const).map((status) => {
+                  const isActive = selectedStatus === status;
+                  return (
+                    <button
+                      key={status}
+                      type="button"
+                      onClick={() => setSelectedStatus(status)}
+                      className={`h-14 rounded-2xl border text-[11px] font-black uppercase tracking-wider flex items-center justify-center transition-all ${
+                        isActive
+                          ? "bg-[var(--app-accent-soft)] border-[var(--app-accent)] text-white shadow-[0_0_15px_rgba(200,80,255,0.15)]"
+                          : "bg-black/40 border-white/5 text-[#555] hover:text-white/60 hover:border-white/10"
+                      }`}
+                    >
+                      {status}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Explanatory reactivation warning banner */}
+            {selectedStatus === "active" && student.status !== "active" && (
+              <div className="p-5 rounded-2xl bg-[var(--app-accent-soft)]/20 border border-[var(--app-accent)]/20 flex flex-col gap-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-[var(--app-accent)]">
+                  ⚡ Reactivation Auto-Rules
+                </span>
+                <p className="text-[11px] font-medium text-white/70 leading-relaxed">
+                  Billing cycle will restart today (Day {Math.min(new Date().getDate(), 28)}) from the current month ({new Date().getFullYear()}-{(new Date().getMonth() + 1).toString().padStart(2, "0")}). Previous paused/on-hold months will be safely locked to prevent old invoice generation.
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-4 mt-2">
+              <button
+                type="button"
+                onClick={() => setIsStatusModalOpen(false)}
+                className="flex-1 h-14 rounded-2xl bg-black/40 border border-white/5 text-[11px] font-black uppercase tracking-widest text-[#555] hover:text-white/60 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleUpdateStatus}
+                disabled={isUpdating}
+                className="flex-1 h-14 rounded-2xl btn-neon text-[11px] uppercase tracking-widest flex items-center justify-center"
+              >
+                {isUpdating ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

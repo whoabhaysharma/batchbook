@@ -4,13 +4,13 @@ import { getFirebaseDb } from "./firebase";
 import { Student, CreateStudentInput } from "../types/student";
 import { Batch, CreateBatchInput } from "../types/batch";
 import { SubjectEnrollment, CreateEnrollmentInput } from "../types/enrollment";
-import { FeeLedger, CreateLedgerInput } from "../types/ledger";
+import { Invoice, CreateInvoiceInput } from "../types/invoice";
 
 
-export async function createLedger(ledger: CreateLedgerInput): Promise<string> {
+export async function createLedger(ledger: CreateInvoiceInput): Promise<string> {
   const db = getFirebaseDb();
   const id = `${ledger.studentId}_${ledger.billingPeriod}`;
-  const docRef = doc(db, "ledger", id);
+  const docRef = doc(db, "invoice", id);
   await setDoc(docRef, {
     ...ledger,
     createdAt: serverTimestamp(),
@@ -21,7 +21,7 @@ export async function createLedger(ledger: CreateLedgerInput): Promise<string> {
 export async function checkExistingLedger(studentId: string, billingPeriod: string): Promise<boolean> {
   const db = getFirebaseDb();
   const q = query(
-    collection(db, "ledger"),
+    collection(db, "invoice"),
     where("studentId", "==", studentId),
     where("billingPeriod", "==", billingPeriod)
   );
@@ -33,7 +33,7 @@ export async function checkExistingLedger(studentId: string, billingPeriod: stri
 export async function getEnrollmentsByStudentId(studentId: string): Promise<SubjectEnrollment[]> {
   const db = getFirebaseDb();
   const q = query(
-    collection(db, "subject_enrollments"), 
+    collection(db, "subject_enrollments"),
     where("studentId", "==", studentId),
     where("status", "==", "active")
   );
@@ -76,7 +76,7 @@ export async function getStudents(tuitionId?: string): Promise<Student[]> {
 export async function getPendingDues(tuitionId: string): Promise<number> {
   const db = getFirebaseDb();
   const q = query(
-    collection(db, "ledger"),
+    collection(db, "invoice"),
     where("tuitionId", "==", tuitionId),
     where("status", "in", ["pending", "overdue"])
   );
@@ -113,6 +113,15 @@ export async function createStudent(student: CreateStudentInput): Promise<string
   return docRef.id;
 }
 
+export async function updateStudent(id: string, updates: Partial<Student>): Promise<void> {
+  const db = getFirebaseDb();
+  const docRef = doc(db, "students", id);
+  await updateDoc(docRef, {
+    ...updates,
+    updatedAt: serverTimestamp()
+  } as any);
+}
+
 export async function createEnrollment(enrollment: CreateEnrollmentInput): Promise<string> {
   const db = getFirebaseDb();
   const docRef = await addDoc(collection(db, "subject_enrollments"), {
@@ -122,16 +131,16 @@ export async function createEnrollment(enrollment: CreateEnrollmentInput): Promi
   return docRef.id;
 }
 
-export async function getLedgerEntries(): Promise<FeeLedger[]> {
+export async function getLedgerEntries(): Promise<Invoice[]> {
   const db = getFirebaseDb();
-  const q = query(collection(db, "ledger"), orderBy("createdAt", "desc"));
+  const q = query(collection(db, "invoice"), orderBy("createdAt", "desc"));
   const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FeeLedger));
+  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Invoice));
 }
 
-export async function updateLedgerStatus(id: string, updates: Partial<FeeLedger>): Promise<void> {
+export async function updateLedgerStatus(id: string, updates: Partial<Invoice>): Promise<void> {
   const db = getFirebaseDb();
-  const docRef = doc(db, "ledger", id);
+  const docRef = doc(db, "invoice", id);
   await updateDoc(docRef, {
     ...updates,
     updatedAt: serverTimestamp(),
@@ -140,7 +149,7 @@ export async function updateLedgerStatus(id: string, updates: Partial<FeeLedger>
 export async function getMonthlyRevenue(tuitionId: string, billingPeriod: string): Promise<number> {
   const db = getFirebaseDb();
   const q = query(
-    collection(db, "ledger"),
+    collection(db, "invoice"),
     where("tuitionId", "==", tuitionId),
     where("billingPeriod", "==", billingPeriod)
   );
@@ -151,12 +160,12 @@ export async function getMonthlyRevenue(tuitionId: string, billingPeriod: string
 export async function getRevenueHistory(tuitionId: string): Promise<{ month: string, amount: number }[]> {
   const db = getFirebaseDb();
   const q = query(
-    collection(db, "ledger"),
+    collection(db, "invoice"),
     where("tuitionId", "==", tuitionId),
     orderBy("createdAt", "asc")
   );
   const querySnapshot = await getDocs(q);
-  
+
   const history: Record<string, number> = {};
   querySnapshot.docs.forEach(doc => {
     const data = doc.data();
@@ -171,9 +180,9 @@ export async function getRevenueHistory(tuitionId: string): Promise<{ month: str
 
 export async function getPaymentStats(tuitionId: string): Promise<{ status: string, count: number, amount: number }[]> {
   const db = getFirebaseDb();
-  const q = query(collection(db, "ledger"), where("tuitionId", "==", tuitionId));
+  const q = query(collection(db, "invoice"), where("tuitionId", "==", tuitionId));
   const querySnapshot = await getDocs(q);
-  
+
   const stats: Record<string, { count: number, amount: number }> = {
     paid: { count: 0, amount: 0 },
     pending: { count: 0, amount: 0 },
@@ -192,41 +201,112 @@ export async function getPaymentStats(tuitionId: string): Promise<{ status: stri
   return Object.entries(stats).map(([status, val]) => ({ status, ...val }));
 }
 
-export async function recordStudentPayment(
+// ==========================================
+// 1. Core Modular helper sub-functions
+// ==========================================
+
+function getCurrentBillingPeriod(): string {
+  const today = new Date();
+  const y = today.getFullYear();
+  const m = (today.getMonth() + 1).toString().padStart(2, "0");
+  return `${y}-${m}`;
+}
+
+interface ActiveEnrollmentFilterParams {
+  startedAt: any;
+  endedAt?: any;
+  invoiceTime: number;
+}
+
+function isEnrollmentActive({ startedAt, endedAt, invoiceTime }: ActiveEnrollmentFilterParams): boolean {
+  const startedTime = startedAt?.toMillis ? startedAt.toMillis() : new Date(startedAt).getTime();
+  const endedTime = endedAt ? (endedAt.toMillis ? endedAt.toMillis() : new Date(endedAt).getTime()) : null;
+  return startedTime <= invoiceTime && (endedTime === null || endedTime > invoiceTime);
+}
+
+async function lazyGenerateCurrentInvoice(
+  db: any,
   studentId: string,
   tuitionId: string,
-  paymentAmount: number,
-  remarks?: string
+  billingPeriod: string,
+  billingDay: number,
+  studentData: Student,
+  allInvoices: Invoice[]
 ): Promise<void> {
-  const db = getFirebaseDb();
-  let remainingPayment = paymentAmount;
+  const currentLedgerId = `${studentId}_${billingPeriod}`;
+  const currentInvoiceExists = allInvoices.some(inv => inv.id === currentLedgerId);
 
-  // 1. Fetch all invoices for the student
-  const q = query(
-    collection(db, "ledger"),
-    where("studentId", "==", studentId)
-  );
-  const snap = await getDocs(q);
-  const allInvoices = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FeeLedger));
+  const isCurrentActive = studentData.status === "active";
+  const isCurrentPeriodActive = !studentData.billingActiveFrom || billingPeriod >= studentData.billingActiveFrom;
 
-  // Filter out paid or cancelled ones, and sort chronologically by billingPeriod (oldest first)
-  const unpaidInvoices = allInvoices
-    .filter(inv => inv.status !== "paid" && inv.status !== "cancelled")
-    .sort((a, b) => a.billingPeriod.localeCompare(b.billingPeriod));
+  if (!currentInvoiceExists && isCurrentActive && isCurrentPeriodActive) {
+    const enrollmentsSnap = await getDocs(
+      query(collection(db, "subject_enrollments"), where("studentId", "==", studentId))
+    );
+    const enrollments = enrollmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-  // 2. Allocate payment to existing unpaid invoices
+    const today = new Date();
+    const invoiceDate = new Date(today.getFullYear(), today.getMonth(), billingDay);
+    
+    const activeEnrollments = enrollments.filter((e: any) =>
+      isEnrollmentActive({
+        startedAt: e.startedAt,
+        endedAt: e.endedAt,
+        invoiceTime: invoiceDate.getTime()
+      })
+    );
+
+    const totalAmount = activeEnrollments.reduce((acc, curr: any) => acc + (curr.monthlyFee || 0), 0);
+
+    if (totalAmount > 0) {
+      const newInvoiceData: CreateInvoiceInput = {
+        studentId,
+        tuitionId,
+        billingPeriod,
+        dueDate: invoiceDate.getTime(),
+        amount: totalAmount,
+        paidAmount: 0,
+        remainingAmount: totalAmount,
+        subjects: activeEnrollments.map((e: any) => ({
+          enrollmentId: e.id || "",
+          subject: e.subject,
+          monthlyFee: e.monthlyFee
+        })),
+        status: "pending",
+        generatedFrom: "lazy",
+        remarks: `Prepayment invoice for ${billingPeriod}. Generated lazily during payment processing.`,
+      };
+
+      const ledgerDocRef = doc(db, "invoice", currentLedgerId);
+      await setDoc(ledgerDocRef, {
+        ...newInvoiceData,
+        createdAt: serverTimestamp()
+      });
+
+      allInvoices.push({ id: currentLedgerId, ...newInvoiceData, createdAt: new Date() } as Invoice);
+    }
+  }
+}
+
+async function allocatePaymentToUnpaidInvoices(
+  db: any,
+  unpaidInvoices: Invoice[],
+  remainingPayment: number,
+  remarks?: string
+): Promise<number> {
+  let paymentLeft = remainingPayment;
+
   for (const invoice of unpaidInvoices) {
     const remainingInvoice = invoice.amount - (invoice.paidAmount || 0);
     if (remainingInvoice <= 0) continue;
 
-    const applyAmount = Math.min(remainingPayment, remainingInvoice);
+    const applyAmount = Math.min(paymentLeft, remainingInvoice);
 
     const updatedPaid = (invoice.paidAmount || 0) + applyAmount;
     const updatedRemaining = invoice.amount - updatedPaid;
     const updatedStatus = updatedRemaining === 0 ? "paid" : "partial";
 
-    // Update document in Firestore
-    const docRef = doc(db, "ledger", invoice.id);
+    const docRef = doc(db, "invoice", invoice.id);
     await updateDoc(docRef, {
       paidAmount: updatedPaid,
       remainingAmount: updatedRemaining,
@@ -236,107 +316,160 @@ export async function recordStudentPayment(
       updatedAt: serverTimestamp()
     });
 
-    remainingPayment -= applyAmount;
-    if (remainingPayment <= 0) break;
+    paymentLeft -= applyAmount;
+    if (paymentLeft <= 0) break;
   }
 
-  // 3. Handle Advance Payments: Lazily generate future invoices if payment remains!
-  if (remainingPayment > 0) {
-    // Determine the latest billing period in the database for this student
-    const sortedAll = allInvoices.sort((a, b) => b.billingPeriod.localeCompare(a.billingPeriod));
-    let latestPeriod = sortedAll.length > 0 ? sortedAll[0].billingPeriod : "";
+  return paymentLeft;
+}
 
-    // If no invoices exist, default to the current period (YYYY-MM)
-    if (!latestPeriod) {
-      const today = new Date();
-      const y = today.getFullYear();
-      const m = (today.getMonth() + 1).toString().padStart(2, "0");
-      latestPeriod = `${y}-${m}`;
-    }
+async function lazyGenerateFutureInvoices(
+  db: any,
+  studentId: string,
+  tuitionId: string,
+  billingDay: number,
+  studentData: Student,
+  allInvoices: Invoice[],
+  remainingPayment: number
+): Promise<void> {
+  let paymentLeft = remainingPayment;
+  if (paymentLeft <= 0) return;
 
-    // Get the student details to fetch their billingDay
-    const studentDoc = await getDoc(doc(db, "students", studentId));
-    if (studentDoc.exists()) {
-      const studentData = studentDoc.data();
-      const billingDay = studentData.billingDay || 1;
+  const sortedAll = allInvoices.sort((a, b) => b.billingPeriod.localeCompare(a.billingPeriod));
+  let latestPeriod = sortedAll.length > 0 ? sortedAll[0].billingPeriod : "";
 
-      // Sequence future billing periods
-      let [year, month] = latestPeriod.split("-").map(Number);
-
-      while (remainingPayment > 0) {
-        // Increment month
-        month++;
-        if (month > 12) {
-          month = 1;
-          year++;
-        }
-        const futurePeriod = `${year}-${month.toString().padStart(2, "0")}`;
-        const futureInvoiceDate = new Date(year, month - 1, billingDay);
-
-        // Fetch subject enrollments for the student
-        const enrollmentsSnap = await getDocs(
-          query(collection(db, "subject_enrollments"), where("studentId", "==", studentId))
-        );
-        const enrollments = enrollmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-        // Filter active enrollments as of futureInvoiceDate
-        const activeEnrollments = enrollments.filter((e: any) => {
-          const startedTime = e.startedAt?.toMillis ? e.startedAt.toMillis() : new Date(e.startedAt).getTime();
-          const endedTime = e.endedAt ? (e.endedAt.toMillis ? e.endedAt.toMillis() : new Date(e.endedAt).getTime()) : null;
-          const invoiceTime = futureInvoiceDate.getTime();
-          return startedTime <= invoiceTime && (endedTime === null || endedTime > invoiceTime);
-        });
-
-        const totalAmount = activeEnrollments.reduce((acc, curr: any) => acc + (curr.monthlyFee || 0), 0);
-
-        if (totalAmount > 0) {
-          const ledgerId = `${studentId}_${futurePeriod}`;
-          const applyAmount = Math.min(remainingPayment, totalAmount);
-
-          const newInvoiceData = {
-            studentId,
-            tuitionId,
-            billingPeriod: futurePeriod,
-            dueDate: futureInvoiceDate.getTime(),
-            amount: totalAmount,
-            paidAmount: applyAmount,
-            remainingAmount: totalAmount - applyAmount,
-            subjects: activeEnrollments.map((e: any) => ({
-              enrollmentId: e.id || "",
-              subject: e.subject,
-              monthlyFee: e.monthlyFee
-            })),
-            status: (totalAmount - applyAmount === 0 ? "paid" : "partial") as any,
-            generatedFrom: "lazy" as const,
-            paidAt: Date.now(),
-            remarks: `Prepayment invoice for ${futurePeriod}. Generated lazily.`,
-            createdAt: serverTimestamp(),
-          };
-
-          // Save deterministic document
-          await setDoc(doc(db, "ledger", ledgerId), newInvoiceData);
-
-          remainingPayment -= applyAmount;
-        } else {
-          // If no active enrollments exist for this future period, break to avoid infinite loop
-          break;
-        }
-      }
-    }
+  if (!latestPeriod) {
+    latestPeriod = getCurrentBillingPeriod();
   }
 
-  // 4. Log the transaction receipt in the payments collection
+  let [year, month] = latestPeriod.split("-").map(Number);
+
+  while (paymentLeft > 0) {
+    month++;
+    if (month > 12) {
+      month = 1;
+      year++;
+    }
+    const futurePeriod = `${year}-${month.toString().padStart(2, "0")}`;
+
+    const isFutureActive = studentData.status === "active";
+    const isFuturePeriodActive = !studentData.billingActiveFrom || futurePeriod >= studentData.billingActiveFrom;
+
+    if (!isFutureActive || !isFuturePeriodActive) {
+      break;
+    }
+
+    const futureInvoiceDate = new Date(year, month - 1, billingDay);
+
+    const enrollmentsSnap = await getDocs(
+      query(collection(db, "subject_enrollments"), where("studentId", "==", studentId))
+    );
+    const enrollments = enrollmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+    const activeEnrollments = enrollments.filter((e: any) =>
+      isEnrollmentActive({
+        startedAt: e.startedAt,
+        endedAt: e.endedAt,
+        invoiceTime: futureInvoiceDate.getTime()
+      })
+    );
+
+    const totalAmount = activeEnrollments.reduce((acc, curr: any) => acc + (curr.monthlyFee || 0), 0);
+
+    if (totalAmount > 0) {
+      const ledgerId = `${studentId}_${futurePeriod}`;
+      const applyAmount = Math.min(paymentLeft, totalAmount);
+
+      const newInvoiceData = {
+        studentId,
+        tuitionId,
+        billingPeriod: futurePeriod,
+        dueDate: futureInvoiceDate.getTime(),
+        amount: totalAmount,
+        paidAmount: applyAmount,
+        remainingAmount: totalAmount - applyAmount,
+        subjects: activeEnrollments.map((e: any) => ({
+          enrollmentId: e.id || "",
+          subject: e.subject,
+          monthlyFee: e.monthlyFee
+        })),
+        status: (totalAmount - applyAmount === 0 ? "paid" : "partial") as any,
+        generatedFrom: "lazy" as const,
+        paidAt: Date.now(),
+        remarks: `Prepayment invoice for ${futurePeriod}. Generated lazily.`,
+        createdAt: serverTimestamp(),
+      };
+
+      await setDoc(doc(db, "invoice", ledgerId), newInvoiceData);
+      paymentLeft -= applyAmount;
+    } else {
+      break;
+    }
+  }
+}
+
+async function logPaymentReceipt(
+  db: any,
+  studentId: string,
+  tuitionId: string,
+  amount: number,
+  remarks?: string
+): Promise<void> {
   await addDoc(collection(db, "payments"), {
     studentId,
     tuitionId,
-    amount: paymentAmount,
+    amount,
     paymentDate: Date.now(),
     remarks: remarks || "",
     createdAt: serverTimestamp()
   });
 }
 
-export async function recordAdHocPayment(payment: { 
+// ==========================================
+// 2. High-Level Modular API methods
+// ==========================================
+
+export async function recordStudentPayment(
+  studentId: string,
+  tuitionId: string,
+  paymentAmount: number,
+  remarks?: string
+): Promise<void> {
+  const db = getFirebaseDb();
+
+  // 1. Fetch Student Details
+  const studentDoc = await getDoc(doc(db, "students", studentId));
+  if (!studentDoc.exists()) {
+    throw new Error("Student not found.");
+  }
+  const studentData = studentDoc.data() as Student;
+  const billingDay = studentData.billingDay || 1;
+  const billingPeriod = getCurrentBillingPeriod();
+
+  // 2. Fetch all existing invoices
+  const q = query(collection(db, "invoice"), where("studentId", "==", studentId));
+  const snap = await getDocs(q);
+  let allInvoices = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Invoice));
+
+  // 3. Lazy generate current month's invoice if missing
+  await lazyGenerateCurrentInvoice(db, studentId, tuitionId, billingPeriod, billingDay, studentData, allInvoices);
+
+  // 4. Sort unpaid invoices chronologically
+  const unpaidInvoices = allInvoices
+    .filter(inv => inv.status !== "paid" && inv.status !== "cancelled")
+    .sort((a, b) => a.billingPeriod.localeCompare(b.billingPeriod));
+
+  // 5. Distribute incoming funds across unpaid invoices
+  let remainingPayment = await allocatePaymentToUnpaidInvoices(db, unpaidInvoices, paymentAmount, remarks);
+
+  // 6. Handle prepayments/advance payments by lazy generating future invoices
+  await lazyGenerateFutureInvoices(db, studentId, tuitionId, billingDay, studentData, allInvoices, remainingPayment);
+
+  // 7. Audit Log the receipt inside Firestore
+  await logPaymentReceipt(db, studentId, tuitionId, paymentAmount, remarks);
+}
+
+export async function recordAdHocPayment(payment: {
   studentId: string;
   tuitionId: string;
   amount: number;

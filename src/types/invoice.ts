@@ -1,4 +1,4 @@
-export interface FeeLedger {
+export interface Invoice {
   id: string;
 
   studentId: string;
@@ -38,5 +38,4 @@ export interface FeeLedger {
   createdAt: any; // Firestore ServerTimestamp
 }
 
-
-export type CreateLedgerInput = Omit<FeeLedger, "id" | "createdAt">;
+export type CreateInvoiceInput = Omit<Invoice, "id" | "createdAt">;

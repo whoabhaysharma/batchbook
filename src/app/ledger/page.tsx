@@ -30,13 +30,13 @@ import {
 } from "@/components/ui/select";
 import { APP_CONFIG } from "@/lib/config";
 import { getLedgerEntries, getStudents, updateLedgerStatus, recordAdHocPayment, getEnrollmentsByStudentId, recordStudentPayment } from "@/lib/db";
-import { FeeLedger } from "@/types/ledger";
+import { Invoice } from "@/types/invoice";
 import { Student } from "@/types/student";
 import { useAuth } from "@/components/auth-provider";
 
 export default function LedgerPage() {
   const { profile } = useAuth();
-  const [ledger, setLedger] = useState<FeeLedger[]>([]);
+  const [ledger, setLedger] = useState<Invoice[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [studentsMap, setStudentsMap] = useState<Record<string, Student>>({});
   const [loading, setLoading] = useState(true);
@@ -319,7 +319,7 @@ export default function LedgerPage() {
   );
 }
 
-function LedgerItem({ item, student, onSettle }: { item: FeeLedger, student?: Student, onSettle: () => void }) {
+function LedgerItem({ item, student, onSettle }: { item: Invoice, student?: Student, onSettle: () => void }) {
   const [payAmount, setPayAmount] = useState((item.remainingAmount !== undefined ? item.remainingAmount : item.amount).toString());
   const [payRemarks, setPayRemarks] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);

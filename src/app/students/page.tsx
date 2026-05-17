@@ -89,11 +89,17 @@ export default function StudentsPage() {
     setIsSubmitting(true);
     try {
       // 1. Create the Student Document (Core Info Only)
+      const today = new Date();
+      const y = today.getFullYear();
+      const m = (today.getMonth() + 1).toString().padStart(2, "0");
+      const currentPeriod = `${y}-${m}`;
+
       const studentId = await createStudent({
         name: newStudentName,
         phone: newStudentPhone || undefined,
         batch: newStudentBatch,
         billingDay: Number(newStudentBillingDay),
+        billingActiveFrom: currentPeriod,
         status: "active",
         tuitionId: profile.tuitionId,
         avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${newStudentName}`,
