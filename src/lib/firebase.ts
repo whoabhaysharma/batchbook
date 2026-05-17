@@ -20,9 +20,19 @@ export function getFirebaseApp(): FirebaseApp {
   return getApps()[0]!;
 }
 
+// Safely determine if running in a local environment
+const isLocalhost = () => {
+  if (typeof window === "undefined") return false;
+  return (
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1" ||
+    window.location.hostname.startsWith("192.168.")
+  );
+};
+
 export function getFirebaseAuth(): Auth {
   const auth = getAuth(getFirebaseApp());
-  if (process.env.NODE_ENV === "development") {
+  if (isLocalhost()) {
     // Only connect if not already connected (prevents error on hot reload)
     if (!(auth as any)._emulatorConfig) {
       connectAuthEmulator(auth, "http://localhost:9099");
@@ -33,7 +43,7 @@ export function getFirebaseAuth(): Auth {
 
 export function getFirebaseDb(): Firestore {
   const db = getFirestore(getFirebaseApp());
-  if (process.env.NODE_ENV === "development") {
+  if (isLocalhost()) {
     // Only connect if not already connected
     if (!(db as any)._terminated) {
       try {
@@ -48,10 +58,8 @@ export function getFirebaseDb(): Firestore {
 
 export function getFirebaseFunctions(): Functions {
   const functions = getFunctions(getFirebaseApp());
-  if (process.env.NODE_ENV === "development") {
+  if (isLocalhost()) {
     connectFunctionsEmulator(functions, "localhost", 5001);
   }
   return functions;
 }
-
-
