@@ -5,7 +5,7 @@
  * FIFO allocations, and prepayment rollovers using standard Jest syntax.
  */
 
-import { getKolkataBillingPeriod, isEnrollmentActive } from "./billing-utils";
+import { getKolkataBillingPeriod, isEnrollmentActive } from "./invoicing-utils";
 import { 
   buildInvoicePayload, 
   sortInvoicesFIFO, 
@@ -45,21 +45,23 @@ describe("2. Active Subject Enrollments Checks", () => {
     expect(isEnrollmentActive(mockInactive, Date.now())).toBe(false);
   });
 
-  it("evaluates start bounds correctly (startedAt)", () => {
-    const startedAt = new Date("2026-05-10").getTime();
-    const enrollment = { ...mockActive, startedAt };
+  it("ignores start bounds for billing calculations (activateAt)", () => {
+    const activateAt = new Date("2026-05-10").getTime();
+    const enrollment = { ...mockActive, activateAt };
 
+    // Keeps start date for reference, but enrollment remains active for billing even if current date is before start date
     expect(isEnrollmentActive(enrollment, new Date("2026-05-15").getTime())).toBe(true);
-    expect(isEnrollmentActive(enrollment, new Date("2026-05-05").getTime())).toBe(false);
+    expect(isEnrollmentActive(enrollment, new Date("2026-05-05").getTime())).toBe(true);
   });
 
-  it("evaluates end bounds correctly (endedAt)", () => {
-    const startedAt = new Date("2026-05-10").getTime();
-    const endedAt = new Date("2026-05-20").getTime();
-    const enrollment = { ...mockActive, startedAt, endedAt };
+  it("ignores end bounds for billing calculations (deactivateAt)", () => {
+    const activateAt = new Date("2026-05-10").getTime();
+    const deactivateAt = new Date("2026-05-20").getTime();
+    const enrollment = { ...mockActive, activateAt, deactivateAt };
 
+    // Keeps end date for reference, but enrollment remains active for billing even if current date is after end date
     expect(isEnrollmentActive(enrollment, new Date("2026-05-15").getTime())).toBe(true);
-    expect(isEnrollmentActive(enrollment, new Date("2026-05-25").getTime())).toBe(false);
+    expect(isEnrollmentActive(enrollment, new Date("2026-05-25").getTime())).toBe(true);
   });
 });
 

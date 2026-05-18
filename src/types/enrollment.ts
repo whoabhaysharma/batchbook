@@ -4,9 +4,9 @@ export interface SubjectEnrollment {
   studentId: string;
   subject: string;
   monthlyFee: number;
-  startedAt: any; // Firestore ServerTimestamp or ISO date
-  endedAt: any | null;
+  activateAt: any; // Timestamp when subject was enrolled/activated
+  deactivateAt?: any | null; // Timestamp when subject was deactivated
   status: "active" | "inactive";
 }
 
-export type CreateEnrollmentInput = Omit<SubjectEnrollment, "id" | "startedAt">;
+export type CreateEnrollmentInput = Omit<SubjectEnrollment, "id" | "activateAt">;

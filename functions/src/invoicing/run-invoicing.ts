@@ -11,7 +11,7 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onRequest } from "firebase-functions/v2/https";
 import { db, FieldValue } from "../admin";
 import * as logger from "firebase-functions/logger";
-import { getKolkataBillingPeriod, getActiveEnrollments } from "./billing-utils";
+import { getKolkataBillingPeriod, getActiveEnrollments } from "./invoicing-utils";
 
 /**
  * Filter students eligible for billing in the current month's sweep.
@@ -186,28 +186,28 @@ async function executeBillingSweep(today: Date): Promise<{
 }
 
 /**
- * Scheduled Cron Job to trigger the daily billing sweep.
+ * Scheduled Cron Job to trigger the daily invoicing sweep.
  * Executes every single day at 6:00 AM IST (Asia/Kolkata).
  */
-export const runBillingJob = onSchedule({
+export const runInvoicingJob = onSchedule({
   schedule: "0 6 * * *",
   timeZone: "Asia/Kolkata",
 }, async (event) => {
   try {
     const today = new Date();
     const results = await executeBillingSweep(today);
-    logger.info("🏁 Scheduled Billing Sweep Complete. Summary:", results);
+    logger.info("🏁 Scheduled Invoicing Sweep Complete. Summary:", results);
   } catch (error: any) {
-    logger.error("🚨 Critical error during scheduled billing sweep job execution:", error);
+    logger.error("🚨 Critical error during scheduled invoicing sweep job execution:", error);
     throw error; // Re-throw to propagate failure state to the Scheduler logs
   }
 });
 
 /**
- * Public HTTPS Function to manually trigger the billing sweep API.
+ * Public HTTPS Function to manually trigger the invoicing sweep API.
  * Allows admins to execute manual sweeps on demand.
  */
-export const triggerBillingManual = onRequest({ cors: true }, async (req, res) => {
+export const triggerInvoicingManual = onRequest({ cors: true }, async (req, res) => {
   try {
     const today = new Date();
     const results = await executeBillingSweep(today);
@@ -216,10 +216,10 @@ export const triggerBillingManual = onRequest({ cors: true }, async (req, res) =
       results,
     });
   } catch (error: any) {
-    logger.error("🚨 Critical error during manual billing sweep trigger:", error);
+    logger.error("🚨 Critical error during manual invoicing sweep trigger:", error);
     res.status(500).json({
       success: false,
-      error: error.message || "Internal billing system manual execution failure",
+      error: error.message || "Internal invoicing system manual execution failure",
     });
   }
 });

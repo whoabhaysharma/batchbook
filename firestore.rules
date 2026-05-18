@@ -1,10 +1,50 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if true;
+    // Helper function to check if the request is from an authenticated user
+    function isAuthenticated() {
+      return request.auth != null;
     }
 
+    // Tuitions Collection: Read-only for authenticated users
+    match /tuitions/{tuitionId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Only written via secure onboarding Cloud Functions
+    }
 
+    // Students Collection
+    match /students/{studentId} {
+      allow read: if isAuthenticated();
+      // Only allow client-side updates to safe profile fields, never roll numbers or tuition association
+      allow create: if false; // Must be created via createStudent Cloud Function to assign sequence & roll number
+      allow update: if isAuthenticated() 
+        && request.resource.data.rollNumber == resource.data.rollNumber
+        && request.resource.data.rollSeq == resource.data.rollSeq
+        && request.resource.data.tuitionId == resource.data.tuitionId;
+      allow delete: if false; // Deletion blocked on the client side
+    }
+
+    // Subject Enrollments Collection: Read-only on the client side.
+    match /subject_enrollments/{enrollmentId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Must use enrollSubject and deactivateSubject Cloud Functions
+    }
+
+    // Invoices Collection (called 'invoice' in DB): Read-only on the client side.
+    match /invoice/{invoiceId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Must use invoicing sweeps and recordPayment Cloud Functions
+    }
+
+    // Payments Collection: Read-only on the client side.
+    match /payments/{paymentId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Must use recordPayment Cloud Function
+    }
+
+    // Batches Collection: Allow read and write for authenticated users
+    match /batches/{batchId} {
+      allow read, write: if isAuthenticated();
+    }
   }
 }

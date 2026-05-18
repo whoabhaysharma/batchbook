@@ -11,13 +11,15 @@ import {
   updateStudent, 
   triggerManualInvoiceGeneration,
   getInvoicesByStudentId,
-  getPaymentsByStudentId
+  getPaymentsByStudentId,
+  createEnrollment,
+  deactivateEnrollment
 } from "@/lib/db";
 import { Student } from "@/types/student";
 import { SubjectEnrollment } from "@/types/enrollment";
 import { Invoice } from "@/types/invoice";
 import { formatPeriod } from "@/lib/utils";
-import { ChevronDown, ChevronUp, Wrench, Sparkles, CheckCircle2, AlertCircle } from "lucide-react";
+import { ChevronDown, ChevronUp, Wrench, Sparkles, CheckCircle2, AlertCircle, Lock, Plus } from "lucide-react";
 
 export default function StudentDetailPage() {
   const { profile } = useAuth();
@@ -59,6 +61,53 @@ export default function StudentDetailPage() {
     }
   };
 
+  // Subject management states
+  const [isAddSubjectOpen, setIsAddSubjectOpen] = useState(false);
+  const [newSubName, setNewSubName] = useState("");
+  const [newSubPrice, setNewSubPrice] = useState("");
+  const [isSubmittingSubject, setIsSubmittingSubject] = useState(false);
+  const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
+
+  const handleDeactivate = async (enrollmentId: string) => {
+    if (!student) return;
+    setDeactivatingId(enrollmentId);
+    try {
+      await deactivateEnrollment(enrollmentId);
+      // Re-fetch enrollments
+      const updated = await getEnrollmentsByStudentId(student.id);
+      setEnrollments(updated);
+    } catch (err) {
+      console.error("Failed to deactivate subject:", err);
+    } finally {
+      setDeactivatingId(null);
+    }
+  };
+
+  const handleAddSubject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSubName || !newSubPrice || !student || !profile?.tuitionId) return;
+    setIsSubmittingSubject(true);
+    try {
+      await createEnrollment({
+        studentId: student.id,
+        tuitionId: profile.tuitionId,
+        subject: newSubName,
+        monthlyFee: Number(newSubPrice),
+        status: "active",
+      });
+      // Reset form and re-fetch
+      setNewSubName("");
+      setNewSubPrice("");
+      setIsAddSubjectOpen(false);
+      const updated = await getEnrollmentsByStudentId(student.id);
+      setEnrollments(updated);
+    } catch (err) {
+      console.error("Failed to add subject:", err);
+    } finally {
+      setIsSubmittingSubject(false);
+    }
+  };
+
   useEffect(() => {
     setIsMounted(true);
     
@@ -91,7 +140,8 @@ export default function StudentDetailPage() {
     fetchStudentData();
   }, []);
 
-  const totalFee = enrollments.reduce((acc, curr) => acc + curr.monthlyFee, 0);
+  const activeEnrollments = enrollments.filter(e => e.status === "active");
+  const totalFee = activeEnrollments.reduce((acc, curr) => acc + curr.monthlyFee, 0);
 
   const handleUpdateStatus = async () => {
     if (!student) return;
@@ -211,21 +261,87 @@ export default function StudentDetailPage() {
 
           {/* Tab Content: Curriculum */}
           {activeTab === "curriculum" && (
-            <div className="flex flex-col gap-3">
-               {enrollments.map((sub, i) => (
-                 <div key={i} className="card-cred p-5 flex items-center justify-between">
-                    <div className="flex flex-col">
-                      <span className="text-[13px] font-bold text-white">{sub.subject}</span>
-                      <span className="text-[9px] font-black text-[#444444] uppercase tracking-widest">Enrolled {sub.startedAt?.seconds ? new Date(sub.startedAt.seconds * 1000).toLocaleDateString() : "Recent"}</span>
-                    </div>
-                    <span className="text-[15px] font-black text-[var(--app-accent)]">₹{sub.monthlyFee}</span>
-                 </div>
-               ))}
-               {enrollments.length === 0 && (
-                 <div className="flex flex-col items-center justify-center py-10 gap-2 border border-white/5 border-dashed rounded-3xl bg-[#030303]">
-                   <span className="text-[10px] font-black uppercase tracking-widest text-[#222222]">No Enrollments Found</span>
-                 </div>
-               )}
+            <div className="flex flex-col gap-6">
+              {/* Header with Add Subject Button */}
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-black uppercase tracking-[0.3em] text-[#444444]">
+                  Enrolled Subjects ({activeEnrollments.length})
+                </span>
+                <button
+                  onClick={() => setIsAddSubjectOpen(true)}
+                  className="h-10 px-4 rounded-xl bg-[#0d0d0d] border border-white/5 shadow-[neu-raised] text-[9px] font-black uppercase tracking-widest text-[var(--app-accent)] hover:border-[var(--app-accent)]/20 active:scale-95 transition-all flex items-center gap-1.5 outline-none"
+                >
+                  <Plus className="h-3.5 w-3.5 text-[var(--app-accent)]" />
+                  Add Subject
+                </button>
+              </div>
+
+              {/* Active Enrollments */}
+              <div className="flex flex-col gap-3">
+                 {activeEnrollments.map((sub, i) => {
+                   const enrollDate = sub.activateAt?.seconds 
+                     ? new Date(sub.activateAt.seconds * 1000).toLocaleDateString()
+                     : "Recent";
+                   return (
+                     <div key={sub.id || i} className="card-cred p-5 flex items-center justify-between group border-l-4 border-l-[var(--app-accent)] animate-in fade-in duration-200">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[14px] font-bold text-white">{sub.subject}</span>
+                          <span className="text-[9px] font-black text-[#444444] uppercase tracking-widest">
+                            Active since {enrollDate}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <span className="text-[15px] font-black text-[var(--app-accent)]">₹{sub.monthlyFee}</span>
+                          <button
+                            onClick={() => handleDeactivate(sub.id)}
+                            disabled={deactivatingId === sub.id}
+                            className="h-9 px-3 rounded-lg bg-red-500/10 border border-red-500/20 text-[9px] font-black uppercase tracking-widest text-[#ff4d4d] hover:bg-red-500/25 hover:text-white transition-all disabled:opacity-30 active:scale-95 outline-none"
+                          >
+                            {deactivatingId === sub.id ? "Deactivating..." : "Deactivate"}
+                          </button>
+                        </div>
+                     </div>
+                   );
+                 })}
+                 {activeEnrollments.length === 0 && (
+                   <div className="flex flex-col items-center justify-center py-10 gap-2 border border-white/5 border-dashed rounded-3xl bg-[#030303]">
+                     <span className="text-[10px] font-black uppercase tracking-widest text-[#222222]">No Active Subjects</span>
+                   </div>
+                 )}
+              </div>
+
+              {/* Inactive / Deactivated Enrollments */}
+              {enrollments.some(e => e.status === "inactive") && (
+                <div className="flex flex-col gap-4 mt-4">
+                  <span className="text-[11px] font-black uppercase tracking-[0.3em] text-[#333333]">
+                    Deactivated History (Reference Only)
+                  </span>
+                  <div className="flex flex-col gap-3">
+                    {enrollments.filter(e => e.status === "inactive").map((sub, i) => {
+                      const deactiveDate = sub.deactivateAt?.seconds
+                        ? new Date(sub.deactivateAt.seconds * 1000).toLocaleDateString()
+                        : "Recent";
+                      return (
+                        <div key={sub.id || i} className="card-cred p-5 flex items-center justify-between opacity-50 bg-[#080808] border-l-4 border-l-red-500/30 animate-in fade-in duration-200">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[13px] font-bold text-[#666666] line-through">{sub.subject}</span>
+                            <span className="text-[9px] font-black text-[#444444] uppercase tracking-widest">
+                              Deactivated on {deactiveDate}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-[13px] font-bold text-[#555]">₹{sub.monthlyFee}</span>
+                            <div className="flex items-center gap-1 text-[8px] font-black uppercase tracking-widest text-red-500/80 bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20">
+                              <Lock className="h-2.5 w-2.5" />
+                              Locked
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -469,6 +585,69 @@ export default function StudentDetailPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+      {/* Add Subject Modal */}
+      {isAddSubjectOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md transition-all duration-300">
+          <form 
+            onSubmit={handleAddSubject}
+            className="w-full max-w-md p-8 rounded-[2.5rem] bg-[#0d0d0d] border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.8)] flex flex-col gap-6 relative animate-in fade-in zoom-in-95 duration-200"
+          >
+            <div className="flex flex-col gap-2">
+              <h3 className="text-xl font-black text-white">Add Curriculum Subject</h3>
+              <p className="text-[11px] font-black text-[#555] uppercase tracking-wider">
+                Enroll this student in a new subject
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
+                <label className="text-[10px] font-black uppercase text-[#666] tracking-widest">Subject Name</label>
+                <input
+                  type="text"
+                  required
+                  value={newSubName}
+                  onChange={(e) => setNewSubName(e.target.value)}
+                  placeholder="e.g. Chemistry"
+                  className="h-14 w-full rounded-2xl bg-black/40 border border-white/5 shadow-[neu-pressed] px-6 text-[14px] font-bold text-white outline-none focus:border-[var(--app-accent)]/20"
+                />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="text-[10px] font-black uppercase text-[#666] tracking-widest">Monthly Fee (₹)</label>
+                <input
+                  type="number"
+                  required
+                  value={newSubPrice}
+                  onChange={(e) => setNewSubPrice(e.target.value)}
+                  placeholder="e.g. 1500"
+                  className="h-14 w-full rounded-2xl bg-black/40 border border-white/5 shadow-[neu-pressed] px-6 text-[14px] font-bold text-white outline-none focus:border-[var(--app-accent)]/20"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-4 mt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAddSubjectOpen(false);
+                  setNewSubName("");
+                  setNewSubPrice("");
+                }}
+                className="flex-1 h-14 rounded-2xl bg-black/40 border border-white/5 text-[11px] font-black uppercase tracking-widest text-[#555] hover:text-white/60 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmittingSubject || !newSubName || !newSubPrice}
+                className="flex-1 h-14 rounded-2xl btn-neon text-[11px] uppercase tracking-widest flex items-center justify-center disabled:opacity-30"
+              >
+                {isSubmittingSubject ? "Enrolling..." : "Enroll Subject"}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>
