@@ -1,9 +1,16 @@
+/**
+ * Payment and Invoicing Helper Module
+ * 
+ * Provides database query routines, business rule validations, invoice payload generators,
+ * chronological FIFO payment allocation operations, and date-advancement utilities.
+ */
+
 import * as functions from "firebase-functions/v2";
 import { Transaction } from "firebase-admin/firestore";
 import { db, FieldValue } from "../admin";
 import { getActiveEnrollments } from "./billing-utils";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── TYPES & SCHEMAS ─────────────────────────────────────────────────────────
 
 export type PaymentMode = "cash" | "upi" | "bank_transfer";
 
@@ -22,52 +29,75 @@ export interface InvoicePayload {
   paidAmount: number;
   remainingAmount: number;
   subjects: { enrollmentId: string; subject: string; monthlyFee: number }[];
-  status: "pending" | "partial" | "paid";
-  generatedFrom: "lazy";
+  status: "pending" | "partial" | "paid" | "overdue";
+  generatedFrom: "cron" | "lazy" | "forced";
   paidAt?: number;
   remarks: string;
   createdAt: any;
 }
 
-// ─── Validation ───────────────────────────────────────────────────────────────
+// ─── VALIDATION ───────────────────────────────────────────────────────────────
 
-/** Throws if any required payment field is missing or invalid. */
-export function validatePaymentRequest(data: any) {
+/**
+ * Validates the parameters of an incoming payment receipt.
+ * Throws clean HttpsError exceptions if fields are missing or invalid.
+ */
+export function validatePaymentRequest(data: any): void {
   if (!data.studentId) {
-    throw new functions.https.HttpsError("invalid-argument", "Missing student ID.");
+    throw new functions.https.HttpsError("invalid-argument", "Missing required field: studentId.");
   }
+  
   if (typeof data.amount !== "number" || data.amount <= 0) {
     throw new functions.https.HttpsError("invalid-argument", "Amount must be a positive number.");
   }
+
   const validModes: PaymentMode[] = ["cash", "upi", "bank_transfer"];
-  if (!validModes.includes(data.paymentMode)) {
-    throw new functions.https.HttpsError("invalid-argument", "Invalid or missing payment mode.");
+  if (!data.paymentMode || !validModes.includes(data.paymentMode)) {
+    throw new functions.https.HttpsError(
+      "invalid-argument", 
+      `Invalid or missing paymentMode. Allowed: ${validModes.join(", ")}`
+    );
   }
 }
 
-// ─── Invoice Fetching ─────────────────────────────────────────────────────────
+// ─── DATABASE FETCHES ─────────────────────────────────────────────────────────
 
-/** Fetches all unpaid (pending or partial) invoices for a student. */
+/**
+ * Fetches all outstanding (pending, partial, or overdue) invoices for a student.
+ */
 export async function fetchUnpaidInvoices(studentId: string): Promise<any[]> {
-  const snap = await db.collection("invoice")
+  const snapshot = await db.collection("invoice")
     .where("studentId", "==", studentId)
-    .where("status", "in", ["pending", "partial"])
+    .where("status", "in", ["pending", "partial", "overdue"])
     .get();
-  return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
-/** Fetches all invoices for a student, returns them sorted newest-first. */
+/**
+ * Finds the latest billing period (format: YYYY-MM) billed to the student.
+ * If no bills exist, falls back to the provided default period.
+ */
 export async function fetchLatestBillingPeriod(studentId: string, fallback: string): Promise<string> {
-  const snap = await db.collection("invoice")
+  const snapshot = await db.collection("invoice")
     .where("studentId", "==", studentId)
     .get();
-  const periods = snap.docs.map(doc => doc.data().billingPeriod as string);
-  return periods.sort().reverse()[0] ?? fallback;
+
+  if (snapshot.empty) {
+    return fallback;
+  }
+
+  const periods = snapshot.docs.map(doc => doc.data().billingPeriod as string);
+  // Sort reverse lexicographically to find the newest period first
+  return periods.sort().reverse()[0] || fallback;
 }
 
-// ─── Invoice Building ─────────────────────────────────────────────────────────
+// ─── INVOICE MODEL BUILDER ───────────────────────────────────────────────────
 
-/** Builds a new invoice data payload from active enrollments. */
+/**
+ * Constructs a new Invoice data payload based on a student's active enrollments.
+ * Returns null if the student has no active enrollments (i.e., total fee is 0).
+ */
 export function buildInvoicePayload(
   studentId: string,
   tuitionId: string,
@@ -77,16 +107,28 @@ export function buildInvoicePayload(
   month: number,
   enrollments: any[],
   paidAmount = 0,
-  generatedFrom: "lazy" = "lazy"
+  generatedFrom: "cron" | "lazy" | "forced" = "lazy"
 ): InvoicePayload | null {
+  // Determine invoice due date based on the student's designated billing day
   const dueDate = new Date(year, month - 1, billingDay);
+  
+  // Resolve enrollments active on this due date
   const activeEnrollments = getActiveEnrollments(enrollments, dueDate.getTime());
   const totalAmount = activeEnrollments.reduce((sum, e: any) => sum + (e.monthlyFee || 0), 0);
 
-  if (totalAmount <= 0) return null;
+  // If there are no fees to collect, do not generate an empty invoice
+  if (totalAmount <= 0) {
+    return null;
+  }
 
   const remainingAmount = totalAmount - paidAmount;
-  const status = remainingAmount === 0 ? "paid" : paidAmount > 0 ? "partial" : "pending";
+  let status: "pending" | "partial" | "paid" = "pending";
+  
+  if (remainingAmount === 0) {
+    status = "paid";
+  } else if (paidAmount > 0) {
+    status = "partial";
+  }
 
   return {
     studentId,
@@ -109,26 +151,30 @@ export function buildInvoicePayload(
   };
 }
 
-// ─── Invoice Writing ──────────────────────────────────────────────────────────
+// ─── FIRESTORE TRANSACTION WRITE OPERATORS ───────────────────────────────────
 
-/** Writes a new invoice document inside a transaction. */
-export function writeInvoice(transaction: Transaction, ledgerId: string, payload: InvoicePayload) {
-  const ref = db.collection("invoice").doc(ledgerId);
-  transaction.set(ref, payload);
+/**
+ * Commits a new invoice document to the database within a transaction.
+ */
+export function writeInvoice(transaction: Transaction, ledgerId: string, payload: InvoicePayload): void {
+  const docRef = db.collection("invoice").doc(ledgerId);
+  transaction.set(docRef, payload);
 }
 
-/** Updates an existing invoice with payment amounts inside a transaction. */
+/**
+ * Mutates an existing invoice to apply a payment amount inside a transaction.
+ */
 export function applyPaymentToInvoice(
   transaction: Transaction,
   invoice: any,
   applyAmount: number,
   remarks: string
-) {
+): void {
   const updatedPaid = (invoice.paidAmount || 0) + applyAmount;
   const updatedRemaining = invoice.amount - updatedPaid;
-  const ref = db.collection("invoice").doc(invoice.id);
+  const docRef = db.collection("invoice").doc(invoice.id);
 
-  transaction.update(ref, {
+  transaction.update(docRef, {
     paidAmount: updatedPaid,
     remainingAmount: updatedRemaining,
     status: updatedRemaining === 0 ? "paid" : "partial",
@@ -138,16 +184,21 @@ export function applyPaymentToInvoice(
   });
 }
 
-// ─── FIFO Allocation ──────────────────────────────────────────────────────────
+// ─── FIFO COLLECTION ALLOCATION ──────────────────────────────────────────────
 
-/** Sorts unpaid invoices oldest-first (FIFO). */
+/**
+ * Sorts unpaid invoices chronologically (oldest first) to enforce FIFO payment processing.
+ */
 export function sortInvoicesFIFO(invoices: any[]): any[] {
   return invoices
     .filter(inv => inv.status !== "paid" && inv.status !== "cancelled")
     .sort((a, b) => a.billingPeriod.localeCompare(b.billingPeriod));
 }
 
-/** Allocates a payment amount against a single invoice. Returns the leftover. */
+/**
+ * Applies a payment amount to a single invoice, capped at the outstanding balance.
+ * Returns the remaining (leftover) payment amount.
+ */
 export function allocateToInvoice(
   transaction: Transaction,
   invoice: any,
@@ -155,29 +206,52 @@ export function allocateToInvoice(
   remarks: string,
   allocations: PaymentAllocation[]
 ): number {
-  const owed = invoice.amount - (invoice.paidAmount || 0);
-  if (owed <= 0) return remainingPayment;
+  const owedAmount = invoice.amount - (invoice.paidAmount || 0);
+  if (owedAmount <= 0) {
+    return remainingPayment;
+  }
 
-  const applyAmount = Math.min(remainingPayment, owed);
+  const applyAmount = Math.min(remainingPayment, owedAmount);
   applyPaymentToInvoice(transaction, invoice, applyAmount, remarks);
-  allocations.push({ ledgerId: invoice.id, billingPeriod: invoice.billingPeriod, amount: applyAmount });
+
+  allocations.push({
+    ledgerId: invoice.id,
+    billingPeriod: invoice.billingPeriod,
+    amount: applyAmount,
+  });
 
   return remainingPayment - applyAmount;
 }
 
-// ─── Period Helpers ───────────────────────────────────────────────────────────
+// ─── DATE & ELIGIBILITY CONVENTIONS ──────────────────────────────────────────
 
-/** Advances a YYYY-MM period string by one month. */
+/**
+ * Increments a YYYY-MM period string by exactly one month.
+ */
 export function nextBillingPeriod(period: string): { period: string; year: number; month: number } {
   let [year, month] = period.split("-").map(Number);
   month++;
-  if (month > 12) { month = 1; year++; }
-  return { period: `${year}-${month.toString().padStart(2, "0")}`, year, month };
+  
+  if (month > 12) {
+    month = 1;
+    year++;
+  }
+  
+  const nextPeriod = `${year}-${month.toString().padStart(2, "0")}`;
+  return { period: nextPeriod, year, month };
 }
 
-/** Returns true if a student is eligible to receive a bill for a given period. */
+/**
+ * Checks if a student is eligible to receive a bill for a given YYYY-MM period.
+ */
 export function isStudentBillableForPeriod(studentData: any, period: string): boolean {
-  if (studentData.status !== "active") return false;
-  if (studentData.billingActiveFrom && period < studentData.billingActiveFrom) return false;
+  if (studentData.status !== "active") {
+    return false;
+  }
+  
+  if (studentData.billingActiveFrom && period < studentData.billingActiveFrom) {
+    return false;
+  }
+  
   return true;
 }

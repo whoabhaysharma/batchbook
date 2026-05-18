@@ -9,6 +9,6 @@ export { setupTuition } from "./onboarding/setup-tuition";
 export { createStudent } from "./students/create-student";
 
 // Billing functions
-export { runBillingJob } from "./billing/run-billing";
+export { runBillingJob, triggerBillingManual } from "./billing/run-billing";
 export { recordPayment } from "./billing/record-payment";
 

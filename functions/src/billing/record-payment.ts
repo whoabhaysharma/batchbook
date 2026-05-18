@@ -1,212 +1,237 @@
+/**
+ * Atomic Payment Recording & Receipt Acceptance
+ * 
+ * Exposes a Callable Cloud Function to record student payments securely.
+ * Executes within a single database transaction to guarantee ACID compliance,
+ * ensuring no race conditions occur when calculating and allocating payments.
+ * 
+ * Business Workflow:
+ * 1. Read student and enrollments.
+ * 2. Lazily create the current month's invoice if due but not yet created.
+ * 3. Chronologically sort all unpaid invoices (FIFO).
+ * 4. Apply incoming payment to settle oldest outstanding balances first.
+ * 5. If an overpayment exists, absorb it by pre-generating future invoices.
+ * 6. Audit log the transaction in the payments collection and return receipt details.
+ */
+
 import * as functions from "firebase-functions/v2";
 import { db, FieldValue } from "../admin";
 import { getKolkataBillingPeriod } from "./billing-utils";
 import {
   validatePaymentRequest,
-  fetchUnpaidInvoices,
   fetchLatestBillingPeriod,
   buildInvoicePayload,
   writeInvoice,
+  applyPaymentToInvoice,
   sortInvoicesFIFO,
-  allocateToInvoice,
   nextBillingPeriod,
   isStudentBillableForPeriod,
   PaymentAllocation,
 } from "./payment-helpers";
 
-// ─── Step Functions ────────────────────────────────────────────────────────────
-
-/** Fetches the student document inside the transaction. Throws if not found. */
-async function fetchStudent(transaction: any, studentId: string) {
-  const studentRef = db.collection("students").doc(studentId);
-  const snap = await transaction.get(studentRef);
-  if (!snap.exists) {
-    throw new functions.https.HttpsError("not-found", "Student not found.");
-  }
-  const data = snap.data()!;
-  if (!data.tuitionId) {
-    throw new functions.https.HttpsError("failed-precondition", "Student is missing tuitionId.");
-  }
-  return data;
-}
-
-/** Fetches all enrollments for a student. */
-async function fetchEnrollments(studentId: string) {
-  const snap = await db.collection("subject_enrollments")
-    .where("studentId", "==", studentId)
-    .get();
-  return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-}
-
 /**
- * Lazily creates the current month's invoice if it doesn't exist yet.
- * Appends it to the unpaid list so FIFO allocation can immediately use it.
+ * Main transactional function to process and allocate student payment receipts.
  */
-function ensureCurrentMonthInvoice(
-  transaction: any,
-  studentId: string,
-  studentData: any,
-  billingPeriod: string,
-  year: number,
-  month: number,
-  enrollments: any[],
-  unpaidInvoices: any[]
-) {
-  const alreadyExists = unpaidInvoices.some(inv => inv.id === `${studentId}_${billingPeriod}`);
-  if (alreadyExists) return;
-  if (!isStudentBillableForPeriod(studentData, billingPeriod)) return;
-
-  const payload = buildInvoicePayload(
-    studentId, studentData.tuitionId, billingPeriod,
-    studentData.billingDay || 1, year, month, enrollments
-  );
-  if (!payload) return;
-
-  const ledgerId = `${studentId}_${billingPeriod}`;
-  writeInvoice(transaction, ledgerId, payload);
-  unpaidInvoices.push({ id: ledgerId, ...payload });
-}
-
-/**
- * Applies payment across unpaid invoices in chronological FIFO order.
- * Returns the leftover amount after all existing invoices are settled.
- */
-function applyFIFOPayment(
-  transaction: any,
-  unpaidInvoices: any[],
-  amount: number,
-  remarks: string,
-  allocations: PaymentAllocation[]
-): number {
-  let remaining = amount;
-  for (const invoice of sortInvoicesFIFO(unpaidInvoices)) {
-    if (remaining <= 0) break;
-    remaining = allocateToInvoice(transaction, invoice, remaining, remarks, allocations);
-  }
-  return remaining;
-}
-
-/**
- * Creates advance invoices for future months until the overpayment is absorbed.
- * Stops when the student is no longer billable or has no active subjects.
- */
-async function absorbOverpaymentInFuturePeriods(
-  transaction: any,
-  studentId: string,
-  studentData: any,
-  enrollments: any[],
-  currentPeriod: string,
-  overpayment: number,
-  allocations: PaymentAllocation[]
-) {
-  if (overpayment <= 0) return;
-
-  let pivot = await fetchLatestBillingPeriod(studentId, currentPeriod);
-  let remaining = overpayment;
-
-  while (remaining > 0) {
-    const { period, year, month } = nextBillingPeriod(pivot);
-    pivot = period;
-
-    if (!isStudentBillableForPeriod(studentData, period)) break;
-
-    const payload = buildInvoicePayload(
-      studentId, studentData.tuitionId, period,
-      studentData.billingDay || 1, year, month, enrollments,
-      Math.min(remaining, Infinity)
-    );
-    if (!payload) break;
-
-    const applyAmount = Math.min(remaining, payload.amount);
-    const ledgerId = `${studentId}_${period}`;
-
-    // Rebuild payload with the actual applied amount
-    const finalPayload = buildInvoicePayload(
-      studentId, studentData.tuitionId, period,
-      studentData.billingDay || 1, year, month, enrollments,
-      applyAmount
-    );
-    if (!finalPayload) break;
-
-    writeInvoice(transaction, ledgerId, finalPayload);
-    allocations.push({ ledgerId, billingPeriod: period, amount: applyAmount });
-    remaining -= applyAmount;
-  }
-}
-
-/** Writes the final payment log document. */
-function writePaymentLog(
-  transaction: any,
-  studentId: string,
-  tuitionId: string,
-  amount: number,
-  paymentMode: string,
-  remarks: string,
-  allocations: PaymentAllocation[],
-  receivedBy: string
-) {
-  const paymentRef = db.collection("payments").doc();
-  transaction.set(paymentRef, {
-    studentId,
-    tuitionId,
-    amount,
-    paymentMode,
-    remarks: remarks || "",
-    allocations,
-    receivedBy,
-    paymentDate: Date.now(),
-    createdAt: FieldValue.serverTimestamp(),
-  });
-  return paymentRef.id;
-}
-
-// ─── Callable Function ─────────────────────────────────────────────────────────
-
-/**
- * Records a student payment.
- * Lazily creates invoices, allocates via FIFO, and handles advance payments.
- */
-export const recordPayment = functions.https.onCall(async (request) => {
+export const recordPayment = functions.https.onCall({ cors: true }, async (request) => {
+  // 1. Authenticate user
   if (!request.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "User must be logged in.");
+    throw new functions.https.HttpsError(
+      "unauthenticated", 
+      "Access Denied: Admin user must be authenticated."
+    );
   }
 
+  // 2. Validate input schema
   validatePaymentRequest(request.data);
+  
   const { studentId, amount, paymentMode, remarks } = request.data;
+  const adminUid = request.auth.uid;
 
   try {
     return await db.runTransaction(async (transaction) => {
-      const studentData = await fetchStudent(transaction, studentId);
-      const { tuitionId } = studentData;
+      // ─── STEP 1: FETCH STUDENT PROFILE WITH TX LOCK ───
+      const studentRef = db.collection("students").doc(studentId);
+      const studentSnap = await transaction.get(studentRef);
+      
+      if (!studentSnap.exists) {
+        throw new functions.https.HttpsError("not-found", "Student profile not found.");
+      }
+      
+      const studentData = studentSnap.data()!;
+      if (!studentData.tuitionId) {
+        throw new functions.https.HttpsError(
+          "failed-precondition", 
+          "Student profile is missing tuitionId association."
+        );
+      }
 
+      const tuitionId = studentData.tuitionId;
+
+      // ─── STEP 2: FETCH ENROLLMENTS ───
+      const enrollmentsSnap = await db.collection("subject_enrollments")
+        .where("studentId", "==", studentId)
+        .get();
+      
+      const enrollments = enrollmentsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      // ─── STEP 3: FETCH UNPAID INVOICES WITH TX LOCK ───
+      const unpaidQuerySnap = await db.collection("invoice")
+        .where("studentId", "==", studentId)
+        .where("status", "in", ["pending", "partial", "overdue"])
+        .get();
+
+      const unpaidInvoices: any[] = [];
+      for (const doc of unpaidQuerySnap.docs) {
+        const lockedDoc = await transaction.get(doc.ref);
+        if (lockedDoc.exists) {
+          unpaidInvoices.push({ id: lockedDoc.id, ...lockedDoc.data() });
+        }
+      }
+
+      // ─── STEP 4: LAZILY GENERATE CURRENT MONTH'S INVOICE IF MISSING ───
       const { billingPeriod, year, month } = getKolkataBillingPeriod();
-      const enrollments = await fetchEnrollments(studentId);
-      const unpaidInvoices = await fetchUnpaidInvoices(studentId);
+      const currentMonthId = `${studentId}_${billingPeriod}`;
+      
+      let currentMonthInvoice = unpaidInvoices.find(inv => inv.id === currentMonthId);
+      
+      if (!currentMonthInvoice && isStudentBillableForPeriod(studentData, billingPeriod)) {
+        const payload = buildInvoicePayload(
+          studentId,
+          tuitionId,
+          billingPeriod,
+          studentData.billingDay || 1,
+          year,
+          month,
+          enrollments,
+          0,
+          "lazy"
+        );
+
+        if (payload) {
+          writeInvoice(transaction, currentMonthId, payload);
+          currentMonthInvoice = { id: currentMonthId, ...payload };
+          unpaidInvoices.push(currentMonthInvoice);
+        }
+      }
+
+      // ─── STEP 5: RUN FIFO PAYMENT ALLOCATION ───
+      let remainingPayment = amount;
       const allocations: PaymentAllocation[] = [];
+      const sortedUnpaid = sortInvoicesFIFO(unpaidInvoices);
 
-      ensureCurrentMonthInvoice(
-        transaction, studentId, studentData,
-        billingPeriod, year, month, enrollments, unpaidInvoices
-      );
+      for (const invoice of sortedUnpaid) {
+        if (remainingPayment <= 0) {
+          break;
+        }
 
-      const leftover = applyFIFOPayment(transaction, unpaidInvoices, amount, remarks, allocations);
+        const owedAmount = invoice.amount - (invoice.paidAmount || 0);
+        if (owedAmount <= 0) {
+          continue;
+        }
 
-      await absorbOverpaymentInFuturePeriods(
-        transaction, studentId, studentData,
-        enrollments, billingPeriod, leftover, allocations
-      );
+        const applyAmount = Math.min(remainingPayment, owedAmount);
+        applyPaymentToInvoice(transaction, invoice, applyAmount, remarks);
 
-      const paymentId = writePaymentLog(
-        transaction, studentId, tuitionId,
-        amount, paymentMode, remarks, allocations,
-        request.auth?.uid || "system"
-      );
+        allocations.push({
+          ledgerId: invoice.id,
+          billingPeriod: invoice.billingPeriod,
+          amount: applyAmount,
+        });
 
-      return { success: true, paymentId, allocations };
+        remainingPayment -= applyAmount;
+      }
+
+      // ─── STEP 6: ABSORB OVERPAYMENT / ADVANCE PAYMENTS ───
+      if (remainingPayment > 0) {
+        let pivotPeriod = await fetchLatestBillingPeriod(studentId, billingPeriod);
+
+        while (remainingPayment > 0) {
+          const { period, year, month } = nextBillingPeriod(pivotPeriod);
+          pivotPeriod = period;
+
+          // Stop pre-billing if student status has changed or period is not active
+          if (!isStudentBillableForPeriod(studentData, period)) {
+            break;
+          }
+
+          // Build preview invoice payload to get total fee
+          const previewPayload = buildInvoicePayload(
+            studentId,
+            tuitionId,
+            period,
+            studentData.billingDay || 1,
+            year,
+            month,
+            enrollments,
+            0,
+            "lazy"
+          );
+
+          if (!previewPayload) {
+            break; // Stop if no fees are outstanding for future months (e.g. no subject enrollments)
+          }
+
+          const applyAmount = Math.min(remainingPayment, previewPayload.amount);
+          
+          // Re-build final invoice payload with the applied prepayment
+          const finalPayload = buildInvoicePayload(
+            studentId,
+            tuitionId,
+            period,
+            studentData.billingDay || 1,
+            year,
+            month,
+            enrollments,
+            applyAmount,
+            "lazy"
+          );
+
+          if (!finalPayload) {
+            break;
+          }
+
+          writeInvoice(transaction, `${studentId}_${period}`, finalPayload);
+
+          allocations.push({
+            ledgerId: `${studentId}_${period}`,
+            billingPeriod: period,
+            amount: applyAmount,
+          });
+
+          remainingPayment -= applyAmount;
+        }
+      }
+
+      // ─── STEP 7: AUDIT LOG TRANSACTION RECEIPT ───
+      const paymentRef = db.collection("payments").doc();
+      const paymentData = {
+        studentId,
+        tuitionId,
+        amount,
+        paymentMode,
+        remarks: remarks || "",
+        allocations,
+        receivedBy: adminUid,
+        paymentDate: Date.now(),
+        createdAt: FieldValue.serverTimestamp(),
+      };
+
+      transaction.set(paymentRef, paymentData);
+
+      return {
+        success: true,
+        paymentId: paymentRef.id,
+        allocations,
+      };
     });
   } catch (error: any) {
-    console.error("recordPayment Error:", error);
-    if (error instanceof functions.https.HttpsError) throw error;
-    throw new functions.https.HttpsError("internal", error.message || "Failed to record payment.");
+    console.error("❌ recordPayment Transaction Error:", error);
+    if (error instanceof functions.https.HttpsError) {
+      throw error;
+    }
+    throw new functions.https.HttpsError(
+      "internal", 
+      error.message || "Failed to process and commit payment transaction."
+    );
   }
 });

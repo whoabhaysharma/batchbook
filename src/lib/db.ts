@@ -1,6 +1,7 @@
 import { collection, query, getDocs, doc, getDoc, orderBy, addDoc, serverTimestamp, where, and, updateDoc, setDoc } from "firebase/firestore";
 
-import { getFirebaseDb } from "./firebase";
+import { getFirebaseDb, getFirebaseFunctions } from "./firebase";
+import { httpsCallable } from "firebase/functions";
 import { Student, CreateStudentInput } from "../types/student";
 import { Batch, CreateBatchInput } from "../types/batch";
 import { SubjectEnrollment, CreateEnrollmentInput } from "../types/enrollment";
@@ -211,15 +212,18 @@ export async function getPaymentStats(tuitionId: string): Promise<{ status: stri
   return Object.entries(stats).map(([status, val]) => ({ status, ...val }));
 }
 
-// ==========================================
-// 1. Core Modular helper sub-functions
-// ==========================================
+// ==============================================================================
+// 1. Client-Side Billing & Invoicing Helpers (Used for manual operations)
+// ==============================================================================
 
+/**
+ * Returns the current billing period code in "YYYY-MM" format.
+ */
 function getCurrentBillingPeriod(): string {
   const today = new Date();
-  const y = today.getFullYear();
-  const m = (today.getMonth() + 1).toString().padStart(2, "0");
-  return `${y}-${m}`;
+  const year = today.getFullYear();
+  const month = (today.getMonth() + 1).toString().padStart(2, "0");
+  return `${year}-${month}`;
 }
 
 interface ActiveEnrollmentFilterParams {
@@ -228,12 +232,18 @@ interface ActiveEnrollmentFilterParams {
   invoiceTime: number;
 }
 
+/**
+ * Evaluates if a subject enrollment is active on a given date.
+ */
 function isEnrollmentActive({ startedAt, endedAt, invoiceTime }: ActiveEnrollmentFilterParams): boolean {
   const startedTime = startedAt?.toMillis ? startedAt.toMillis() : new Date(startedAt).getTime();
   const endedTime = endedAt ? (endedAt.toMillis ? endedAt.toMillis() : new Date(endedAt).getTime()) : null;
   return startedTime <= invoiceTime && (endedTime === null || endedTime > invoiceTime);
 }
 
+/**
+ * Lazily creates the current month's invoice in Firestore if it doesn't exist yet.
+ */
 async function lazyGenerateCurrentInvoice(
   db: any,
   studentId: string,
@@ -298,6 +308,9 @@ async function lazyGenerateCurrentInvoice(
   }
 }
 
+/**
+ * Distributes payment funds across a list of unpaid invoices in FIFO order.
+ */
 async function allocatePaymentToUnpaidInvoices(
   db: any,
   unpaidInvoices: Invoice[],
@@ -333,6 +346,9 @@ async function allocatePaymentToUnpaidInvoices(
   return paymentLeft;
 }
 
+/**
+ * Pre-generates future months' invoices for overpayments.
+ */
 async function lazyGenerateFutureInvoices(
   db: any,
   studentId: string,
@@ -418,6 +434,9 @@ async function lazyGenerateFutureInvoices(
   }
 }
 
+/**
+ * Audit logs the payment receipt in the database.
+ */
 async function logPaymentReceipt(
   db: any,
   studentId: string,
@@ -435,48 +454,28 @@ async function logPaymentReceipt(
   });
 }
 
-// ==========================================
-// 2. High-Level Modular API methods
-// ==========================================
+// ==============================================================================
+// 2. High-Level Secure Financial API Methods
+// ==============================================================================
 
+/**
+ * Records a student payment by invoking the secure, transaction-safe Cloud Function.
+ */
 export async function recordStudentPayment(
   studentId: string,
   tuitionId: string,
   paymentAmount: number,
   remarks?: string
 ): Promise<void> {
-  const db = getFirebaseDb();
+  const functionsInstance = getFirebaseFunctions();
+  const recordPaymentFn = httpsCallable<any, any>(functionsInstance, "recordPayment");
 
-  // 1. Fetch Student Details
-  const studentDoc = await getDoc(doc(db, "students", studentId));
-  if (!studentDoc.exists()) {
-    throw new Error("Student not found.");
-  }
-  const studentData = studentDoc.data() as Student;
-  const billingDay = studentData.billingDay || 1;
-  const billingPeriod = getCurrentBillingPeriod();
-
-  // 2. Fetch all existing invoices
-  const q = query(collection(db, "invoice"), where("studentId", "==", studentId));
-  const snap = await getDocs(q);
-  let allInvoices = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Invoice));
-
-  // 3. Lazy generate current month's invoice if missing
-  await lazyGenerateCurrentInvoice(db, studentId, tuitionId, billingPeriod, billingDay, studentData, allInvoices);
-
-  // 4. Sort unpaid invoices chronologically
-  const unpaidInvoices = allInvoices
-    .filter(inv => inv.status !== "paid" && inv.status !== "cancelled")
-    .sort((a, b) => a.billingPeriod.localeCompare(b.billingPeriod));
-
-  // 5. Distribute incoming funds across unpaid invoices
-  let remainingPayment = await allocatePaymentToUnpaidInvoices(db, unpaidInvoices, paymentAmount, remarks);
-
-  // 6. Handle prepayments/advance payments by lazy generating future invoices
-  await lazyGenerateFutureInvoices(db, studentId, tuitionId, billingDay, studentData, allInvoices, remainingPayment);
-
-  // 7. Audit Log the receipt inside Firestore
-  await logPaymentReceipt(db, studentId, tuitionId, paymentAmount, remarks);
+  await recordPaymentFn({
+    studentId,
+    amount: paymentAmount,
+    paymentMode: "cash", // Defaults to cash; Cloud Function resolves auth and executes FIFO allocations atomically
+    remarks: remarks || "",
+  });
 }
 
 export async function recordAdHocPayment(payment: {

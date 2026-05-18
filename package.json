@@ -11,6 +11,7 @@
     "watch:functions": "npm --prefix functions run build:watch",
     "emulators": "npm run build:functions && firebase emulators:start",
     "db:seed": "npx tsx seed.ts",
+    "test:backend": "npm --prefix functions run test",
     "dev:all": "concurrently -k -s first -n \"Next,Func,Emul\" -c \"cyan,magenta,yellow\" \"npm run dev\" \"npm run watch:functions\" \"npx firebase emulators:start\""
   },
   "dependencies": {
