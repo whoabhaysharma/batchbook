@@ -387,7 +387,7 @@ export default function StudentsPage() {
                 {student.name}
               </h4>
               <p className="text-[11px] font-bold text-[#444444] uppercase tracking-wider">
-                {student.batch} • {student.rollNumber}
+                {student.batch} • Roll: {student.rollNumber || "—"}
               </p>
             </div>
 
