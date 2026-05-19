@@ -16,7 +16,7 @@
 
 import * as functions from "firebase-functions/v2";
 import { db, FieldValue } from "../admin";
-import { getKolkataBillingPeriod } from "./billing-utils";
+import { getKolkataBillingPeriod } from "./invoicing-utils";
 import {
   validatePaymentRequest,
   fetchLatestBillingPeriod,

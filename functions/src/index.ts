@@ -7,8 +7,10 @@ export { setupTuition } from "./onboarding/setup-tuition";
 
 // Student functions
 export { createStudent } from "./students/create-student";
+export { deactivateSubject, preventSubjectReactivation } from "./students/deactivate-subject";
+export { enrollSubject } from "./students/enroll-subject";
 
-// Billing functions
-export { runBillingJob, triggerBillingManual } from "./billing/run-billing";
-export { recordPayment } from "./billing/record-payment";
+// Invoicing functions
+export { runInvoicingJob, triggerInvoicingManual } from "./invoicing/run-invoicing";
+export { recordPayment } from "./invoicing/record-payment";
 

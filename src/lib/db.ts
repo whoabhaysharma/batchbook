@@ -35,8 +35,7 @@ export async function getEnrollmentsByStudentId(studentId: string): Promise<Subj
   const db = getFirebaseDb();
   const q = query(
     collection(db, "subject_enrollments"),
-    where("studentId", "==", studentId),
-    where("status", "==", "active")
+    where("studentId", "==", studentId)
   );
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SubjectEnrollment));
@@ -105,15 +104,6 @@ export async function createBatch(batch: CreateBatchInput): Promise<string> {
   return docRef.id;
 }
 
-export async function createStudent(student: CreateStudentInput): Promise<string> {
-  const db = getFirebaseDb();
-  const docRef = await addDoc(collection(db, "students"), {
-    ...student,
-    createdAt: serverTimestamp(),
-  });
-  return docRef.id;
-}
-
 export async function updateStudent(id: string, updates: Partial<Student>): Promise<void> {
   const db = getFirebaseDb();
   const docRef = doc(db, "students", id);
@@ -134,12 +124,26 @@ export async function updateBatch(id: string, updates: Partial<Batch>): Promise<
 
 
 export async function createEnrollment(enrollment: CreateEnrollmentInput): Promise<string> {
-  const db = getFirebaseDb();
-  const docRef = await addDoc(collection(db, "subject_enrollments"), {
-    ...enrollment,
-    enrolledAt: serverTimestamp(),
+  const functions = getFirebaseFunctions();
+  const enrollFn = httpsCallable<{
+    studentId: string;
+    tuitionId: string;
+    subject: string;
+    monthlyFee: number;
+  }, { id: string }>(functions, "enrollSubject");
+  const result = await enrollFn({
+    studentId: enrollment.studentId,
+    tuitionId: enrollment.tuitionId,
+    subject: enrollment.subject,
+    monthlyFee: enrollment.monthlyFee,
   });
-  return docRef.id;
+  return result.data.id;
+}
+
+export async function deactivateEnrollment(id: string): Promise<void> {
+  const functions = getFirebaseFunctions();
+  const deactivateFn = httpsCallable<{ enrollmentId: string }, { success: boolean }>(functions, "deactivateSubject");
+  await deactivateFn({ enrollmentId: id });
 }
 
 export async function getLedgerEntries(): Promise<Invoice[]> {
@@ -147,15 +151,6 @@ export async function getLedgerEntries(): Promise<Invoice[]> {
   const q = query(collection(db, "invoice"), orderBy("createdAt", "desc"));
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Invoice));
-}
-
-export async function updateLedgerStatus(id: string, updates: Partial<Invoice>): Promise<void> {
-  const db = getFirebaseDb();
-  const docRef = doc(db, "invoice", id);
-  await updateDoc(docRef, {
-    ...updates,
-    updatedAt: serverTimestamp(),
-  });
 }
 export async function getMonthlyRevenue(tuitionId: string, billingPeriod: string): Promise<number> {
   const db = getFirebaseDb();
@@ -227,18 +222,18 @@ function getCurrentBillingPeriod(): string {
 }
 
 interface ActiveEnrollmentFilterParams {
-  startedAt: any;
-  endedAt?: any;
-  invoiceTime: number;
+  status: string;
+  activateAt?: any;
+  deactivateAt?: any;
+  invoiceTime?: number;
 }
 
 /**
- * Evaluates if a subject enrollment is active on a given date.
+ * Evaluates if a subject enrollment is active.
+ * Keeps only active/inactive dates for reference, but billing calculations are not affected by them.
  */
-function isEnrollmentActive({ startedAt, endedAt, invoiceTime }: ActiveEnrollmentFilterParams): boolean {
-  const startedTime = startedAt?.toMillis ? startedAt.toMillis() : new Date(startedAt).getTime();
-  const endedTime = endedAt ? (endedAt.toMillis ? endedAt.toMillis() : new Date(endedAt).getTime()) : null;
-  return startedTime <= invoiceTime && (endedTime === null || endedTime > invoiceTime);
+function isEnrollmentActive({ status }: ActiveEnrollmentFilterParams): boolean {
+  return status === "active";
 }
 
 /**
@@ -267,11 +262,12 @@ async function lazyGenerateCurrentInvoice(
 
     const today = new Date();
     const invoiceDate = new Date(today.getFullYear(), today.getMonth(), billingDay);
-    
+
     const activeEnrollments = enrollments.filter((e: any) =>
       isEnrollmentActive({
-        startedAt: e.startedAt,
-        endedAt: e.endedAt,
+        status: e.status,
+        activateAt: e.activateAt,
+        deactivateAt: e.deactivateAt,
         invoiceTime: invoiceDate.getTime()
       })
     );
@@ -394,8 +390,9 @@ async function lazyGenerateFutureInvoices(
 
     const activeEnrollments = enrollments.filter((e: any) =>
       isEnrollmentActive({
-        startedAt: e.startedAt,
-        endedAt: e.endedAt,
+        status: e.status,
+        activateAt: e.activateAt,
+        deactivateAt: e.deactivateAt,
         invoiceTime: futureInvoiceDate.getTime()
       })
     );
@@ -528,8 +525,9 @@ export async function forceGenerateInvoice(
 
   const activeEnrollments = enrollments.filter((e: any) =>
     isEnrollmentActive({
-      startedAt: e.startedAt,
-      endedAt: e.endedAt,
+      status: e.status,
+      activateAt: e.activateAt,
+      deactivateAt: e.deactivateAt,
       invoiceTime: invoiceDate.getTime()
     })
   );

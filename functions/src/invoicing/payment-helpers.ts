@@ -8,7 +8,7 @@
 import * as functions from "firebase-functions/v2";
 import { Transaction } from "firebase-admin/firestore";
 import { db, FieldValue } from "../admin";
-import { getActiveEnrollments } from "./billing-utils";
+import { getActiveEnrollments } from "./invoicing-utils";
 
 // ─── TYPES & SCHEMAS ─────────────────────────────────────────────────────────
 

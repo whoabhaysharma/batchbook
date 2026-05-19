@@ -126,7 +126,6 @@ export default function StudentsPage() {
       });
       const studentId = studentResult.id;
 
-      // 2. Create Normalized Subject Enrollments (The Source of Truth)
       const enrollmentPromises = selectedSubjects.map(s => 
         createEnrollment({
           studentId: studentId,
@@ -134,7 +133,6 @@ export default function StudentsPage() {
           subject: s.name,
           monthlyFee: s.price,
           status: "active",
-          endedAt: null
         })
       );
 

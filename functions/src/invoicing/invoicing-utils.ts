@@ -1,5 +1,5 @@
 /**
- * Billing Utilities & Helper Functions
+ * Invoicing Utilities & Helper Functions
  * 
  * Provides timezone-safe date operations and subject enrollment active-state logic
  * to ensure consistent invoice period calculations and accurate fee computation.
@@ -29,7 +29,7 @@ export function getKolkataBillingPeriod(date: Date = new Date()): {
     month: "2-digit",
     day: "2-digit",
   });
-  
+
   const parts = formatter.formatToParts(date);
   const year = parseInt(parts.find(p => p.type === "year")!.value, 10);
   const month = parseInt(parts.find(p => p.type === "month")!.value, 10);
@@ -44,38 +44,14 @@ export function getKolkataBillingPeriod(date: Date = new Date()): {
 /**
  * Checks if a specific subject enrollment is active.
  * 
- * An enrollment is active if:
- * 1. Its status field is "active".
- * 2. If a start timestamp is specified, the invoice date is greater or equal to it.
- * 3. If an end timestamp is specified, the invoice date is strictly before it.
+ * An enrollment is active if its status field is "active".
+ * Note: activateAt (activation date) and deactivateAt (deactivation date) are kept for future reference
+ * but they do not affect the billing calculation.
  */
-export function isEnrollmentActive(enrollment: any, invoiceTimeMs: number): boolean {
+export function isEnrollmentActive(enrollment: any, invoiceTimeMs?: number): boolean {
   if (!enrollment || enrollment.status !== "active") {
     return false;
   }
-
-  // Check optional startedAt boundary if present
-  if (enrollment.startedAt) {
-    const startedTimeMs = enrollment.startedAt.toMillis
-      ? enrollment.startedAt.toMillis()
-      : new Date(enrollment.startedAt).getTime();
-    
-    if (startedTimeMs > invoiceTimeMs) {
-      return false;
-    }
-  }
-
-  // Check optional endedAt boundary if present
-  if (enrollment.endedAt) {
-    const endedTimeMs = enrollment.endedAt.toMillis
-      ? enrollment.endedAt.toMillis()
-      : new Date(enrollment.endedAt).getTime();
-    
-    if (endedTimeMs <= invoiceTimeMs) {
-      return false;
-    }
-  }
-
   return true;
 }
 

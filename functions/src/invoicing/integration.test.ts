@@ -18,7 +18,9 @@
  */
 
 import { db } from "../admin";
-import { getKolkataBillingPeriod, getActiveEnrollments } from "./billing-utils";
+import { enrollSubjectHandler } from "../students/enroll-subject";
+import { deactivateSubjectHandler } from "../students/deactivate-subject";
+import { getKolkataBillingPeriod, getActiveEnrollments } from "./invoicing-utils";
 import { 
   buildInvoicePayload, 
   sortInvoicesFIFO, 
@@ -95,36 +97,37 @@ if (!isEmulatorRunning) {
     });
 
     it("Step 2: Assigns active Subject Enrollments to the student profile", async () => {
-      const enrollments = [
-        {
-          studentId,
-          subject: "Mathematics",
-          monthlyFee: 2000,
-          status: "active",
-          startedAt: new Date("2026-05-01").getTime()
-        },
-        {
-          studentId,
-          subject: "Physics",
-          monthlyFee: 1500,
-          status: "active",
-          startedAt: new Date("2026-05-01").getTime()
-        },
-        {
-          studentId,
-          subject: "Chemistry",
-          monthlyFee: 1200,
-          status: "inactive", // Inactive enrollment; should not be billed
-          startedAt: new Date("2026-05-01").getTime()
-        }
-      ];
+      // 1. Enroll Mathematics using our secure Cloud Function!
+      const mathResult = await enrollSubjectHandler({
+        studentId,
+        tuitionId,
+        subject: "Mathematics",
+        monthlyFee: 2000
+      }, { uid: "test_admin", token: {} } as any);
+      expect(mathResult.id).toBeDefined();
 
-      const batch = db.batch();
-      for (const e of enrollments) {
-        const docRef = db.collection("subject_enrollments").doc();
-        batch.set(docRef, e);
-      }
-      await batch.commit();
+      // 2. Enroll Physics using our secure Cloud Function!
+      const physicsResult = await enrollSubjectHandler({
+        studentId,
+        tuitionId,
+        subject: "Physics",
+        monthlyFee: 1500
+      }, { uid: "test_admin", token: {} } as any);
+      expect(physicsResult.id).toBeDefined();
+
+      // 3. Enroll Chemistry using our secure Cloud Function!
+      const chemistryResult = await enrollSubjectHandler({
+        studentId,
+        tuitionId,
+        subject: "Chemistry",
+        monthlyFee: 1200
+      }, { uid: "test_admin", token: {} } as any);
+      expect(chemistryResult.id).toBeDefined();
+
+      // 4. Deactivate Chemistry using our secure Cloud Function!
+      await deactivateSubjectHandler({
+        enrollmentId: chemistryResult.id
+      }, { uid: "test_admin", token: {} } as any);
 
       const snap = await db.collection("subject_enrollments")
         .where("studentId", "==", studentId)
