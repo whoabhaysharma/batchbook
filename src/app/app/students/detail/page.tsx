@@ -210,7 +210,7 @@ export default function StudentDetailPage() {
         <div className="flex flex-col items-center gap-1">
           <h1 className="text-3xl font-black text-white tracking-tight">{student.name}</h1>
           <p className="text-[11px] font-black uppercase tracking-[0.4em] text-[#444444]">
-            {student.rollNumber || "PENDING ID"}
+            Roll No: {student.rollNumber || "PENDING"}
           </p>
         </div>
       </header>
