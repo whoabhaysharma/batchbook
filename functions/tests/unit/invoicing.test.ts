@@ -5,13 +5,13 @@
  * FIFO allocations, and prepayment rollovers using standard Jest syntax.
  */
 
-import { getKolkataBillingPeriod, isEnrollmentActive } from "./invoicing-utils";
+import { getKolkataBillingPeriod, isEnrollmentActive } from "../../src/invoicing/invoicing-utils";
 import { 
   buildInvoicePayload, 
   sortInvoicesFIFO, 
   nextBillingPeriod, 
   isStudentBillableForPeriod 
-} from "./payment-helpers";
+} from "../../src/invoicing/payment-helpers";
 
 describe("1. Asia/Kolkata Timezone & Billing Period", () => {
   it("resolves UTC time correctly to Kolkata YYYY-MM period", () => {

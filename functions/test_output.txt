@@ -1,0 +1,144 @@
+
+> test
+> jest
+
+PASS src/invoicing/invoicing.test.ts
+PASS src/invoicing/integration.test.ts
+  ● Console
+
+    console.warn
+      ⚠️  Skipping Integration Tests: FIRESTORE_EMULATOR_HOST is not defined.
+         To run full database lifecycle integration tests, start the emulators and run:
+         FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 npm run test:backend
+
+      36 |   describe("BatchBook Billing & Payment Full Lifecycle Integration Flow", () => {
+      37 |     it("Skipped integration tests (no local Firestore emulator detected)", () => {
+    > 38 |       console.warn(
+         |               ^
+      39 |         "⚠️  Skipping Integration Tests: FIRESTORE_EMULATOR_HOST is not defined.\n" +
+      40 |         "   To run full database lifecycle integration tests, start the emulators and run:\n" +
+      41 |         "   FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 npm run test:backend"
+
+      at Object.<anonymous> (src/invoicing/integration.test.ts:38:15)
+
+FAIL src/students/students.integration.test.ts
+  ● Test suite failed to run
+
+    [96msrc/students/students.integration.test.ts[0m:[93m4[0m:[93m10[0m - [91merror[0m[90m TS6133: [0m'enrollSubjectHandler' is declared but its value is never read.
+
+    [7m4[0m import { enrollSubjectHandler, enrollSubject } from "./enroll-subject";
+    [7m [0m [91m         ~~~~~~~~~~~~~~~~~~~~[0m
+    [96msrc/students/students.integration.test.ts[0m:[93m5[0m:[93m10[0m - [91merror[0m[90m TS6133: [0m'deactivateSubjectHandler' is declared but its value is never read.
+
+    [7m5[0m import { deactivateSubjectHandler, deactivateSubject } from "./deactivate-subject";
+    [7m [0m [91m         ~~~~~~~~~~~~~~~~~~~~~~~~[0m
+    [96msrc/students/students.integration.test.ts[0m:[93m64[0m:[93m38[0m - [91merror[0m[90m TS2740: [0mType '{}' is missing the following properties from type 'DecodedIdToken': aud, auth_time, exp, firebase, and 4 more.
+
+    [7m64[0m           auth: { uid: "test_admin", token: {} },
+    [7m  [0m [91m                                     ~~~~~[0m
+    [96msrc/students/students.integration.test.ts[0m:[93m83[0m:[93m38[0m - [91merror[0m[90m TS2740: [0mType '{}' is missing the following properties from type 'DecodedIdToken': aud, auth_time, exp, firebase, and 4 more.
+
+    [7m83[0m           auth: { uid: "test_admin", token: {} },
+    [7m  [0m [91m                                     ~~~~~[0m
+    [96msrc/students/students.integration.test.ts[0m:[93m88[0m:[93m38[0m - [91merror[0m[90m TS2740: [0mType '{}' is missing the following properties from type 'DecodedIdToken': aud, auth_time, exp, firebase, and 4 more.
+
+    [7m88[0m           auth: { uid: "test_admin", token: {} },
+    [7m  [0m [91m                                     ~~~~~[0m
+    [96msrc/students/students.integration.test.ts[0m:[93m98[0m:[93m32[0m - [91merror[0m[90m TS2345: [0mArgument of type '{ data: { tuitionId: string; studentData: {}; }; }' is not assignable to parameter of type 'CallableRequest<any>'.
+      Property 'rawRequest' is missing in type '{ data: { tuitionId: string; studentData: {}; }; }' but required in type 'CallableRequest<any>'.
+
+    [7m98[0m           wrappedCreateStudent({ data: { tuitionId, studentData: {} } })
+    [7m  [0m [91m                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+
+      [96mnode_modules/firebase-functions/lib/common/providers/https.d.ts[0m:[93m86[0m:[93m5[0m
+        [7m86[0m     rawRequest: Request;
+        [7m  [0m [96m    ~~~~~~~~~~[0m
+        'rawRequest' is declared here.
+    [96msrc/students/students.integration.test.ts[0m:[93m108[0m:[93m38[0m - [91merror[0m[90m TS2740: [0mType '{}' is missing the following properties from type 'DecodedIdToken': aud, auth_time, exp, firebase, and 4 more.
+
+    [7m108[0m           auth: { uid: "test_admin", token: {} },
+    [7m   [0m [91m                                     ~~~~~[0m
+    [96msrc/students/students.integration.test.ts[0m:[93m116[0m:[93m38[0m - [91merror[0m[90m TS2740: [0mType '{}' is missing the following properties from type 'DecodedIdToken': aud, auth_time, exp, firebase, and 4 more.
+
+    [7m116[0m           auth: { uid: "test_admin", token: {} },
+    [7m   [0m [91m                                     ~~~~~[0m
+    [96msrc/students/students.integration.test.ts[0m:[93m131[0m:[93m38[0m - [91merror[0m[90m TS2740: [0mType '{}' is missing the following properties from type 'DecodedIdToken': aud, auth_time, exp, firebase, and 4 more.
+
+    [7m131[0m           auth: { uid: "test_admin", token: {} },
+    [7m   [0m [91m                                     ~~~~~[0m
+    [96msrc/students/students.integration.test.ts[0m:[93m137[0m:[93m40[0m - [91merror[0m[90m TS2740: [0mType '{}' is missing the following properties from type 'DecodedIdToken': aud, auth_time, exp, firebase, and 4 more.
+
+    [7m137[0m             auth: { uid: "test_admin", token: {} },
+    [7m   [0m [91m                                       ~~~~~[0m
+    [96msrc/students/students.integration.test.ts[0m:[93m145[0m:[93m38[0m - [91merror[0m[90m TS2740: [0mType '{}' is missing the following properties from type 'DecodedIdToken': aud, auth_time, exp, firebase, and 4 more.
+
+    [7m145[0m           auth: { uid: "test_admin", token: {} },
+    [7m   [0m [91m                                     ~~~~~[0m
+    [96msrc/students/students.integration.test.ts[0m:[93m150[0m:[93m38[0m - [91merror[0m[90m TS2740: [0mType '{}' is missing the following properties from type 'DecodedIdToken': aud, auth_time, exp, firebase, and 4 more.
+
+    [7m150[0m           auth: { uid: "test_admin", token: {} },
+    [7m   [0m [91m                                     ~~~~~[0m
+    [96msrc/students/students.integration.test.ts[0m:[93m163[0m:[93m38[0m - [91merror[0m[90m TS2740: [0mType '{}' is missing the following properties from type 'DecodedIdToken': aud, auth_time, exp, firebase, and 4 more.
+
+    [7m163[0m           auth: { uid: "test_admin", token: {} },
+    [7m   [0m [91m                                     ~~~~~[0m
+    [96msrc/students/students.integration.test.ts[0m:[93m169[0m:[93m38[0m - [91merror[0m[90m TS2740: [0mType '{}' is missing the following properties from type 'DecodedIdToken': aud, auth_time, exp, firebase, and 4 more.
+
+    [7m169[0m           auth: { uid: "test_admin", token: {} },
+    [7m   [0m [91m                                     ~~~~~[0m
+    [96msrc/students/students.integration.test.ts[0m:[93m176[0m:[93m40[0m - [91merror[0m[90m TS2740: [0mType '{}' is missing the following properties from type 'DecodedIdToken': aud, auth_time, exp, firebase, and 4 more.
+
+    [7m176[0m             auth: { uid: "test_admin", token: {} },
+    [7m   [0m [91m                                       ~~~~~[0m
+    [96msrc/students/students.integration.test.ts[0m:[93m184[0m:[93m38[0m - [91merror[0m[90m TS2740: [0mType '{}' is missing the following properties from type 'DecodedIdToken': aud, auth_time, exp, firebase, and 4 more.
+
+    [7m184[0m           auth: { uid: "test_admin", token: {} },
+    [7m   [0m [91m                                     ~~~~~[0m
+    [96msrc/students/students.integration.test.ts[0m:[93m189[0m:[93m38[0m - [91merror[0m[90m TS2740: [0mType '{}' is missing the following properties from type 'DecodedIdToken': aud, auth_time, exp, firebase, and 4 more.
+
+    [7m189[0m           auth: { uid: "test_admin", token: {} },
+    [7m   [0m [91m                                     ~~~~~[0m
+    [96msrc/students/students.integration.test.ts[0m:[93m195[0m:[93m38[0m - [91merror[0m[90m TS2740: [0mType '{}' is missing the following properties from type 'DecodedIdToken': aud, auth_time, exp, firebase, and 4 more.
+
+    [7m195[0m           auth: { uid: "test_admin", token: {} },
+    [7m   [0m [91m                                     ~~~~~[0m
+
+FAIL src/onboarding/setup-tuition.integration.test.ts
+  ● Test suite failed to run
+
+    [96msrc/onboarding/setup-tuition.integration.test.ts[0m:[93m37[0m:[93m29[0m - [91merror[0m[90m TS2345: [0mArgument of type '{ data: { tuitionName: string; tuitionCode: string; userName: string; }; }' is not assignable to parameter of type 'CallableRequest<any>'.
+      Property 'rawRequest' is missing in type '{ data: { tuitionName: string; tuitionCode: string; userName: string; }; }' but required in type 'CallableRequest<any>'.
+
+    [7m37[0m         wrappedSetupTuition({
+    [7m  [0m [91m                            ~[0m
+    [7m38[0m           data: { tuitionName: "Test Tuition", tuitionCode: "TST", userName: "Admin" },
+    [7m  [0m [91m~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+    [7m39[0m         })
+    [7m  [0m [91m~~~~~~~~~[0m
+
+      [96mnode_modules/firebase-functions/lib/common/providers/https.d.ts[0m:[93m86[0m:[93m5[0m
+        [7m86[0m     rawRequest: Request;
+        [7m  [0m [96m    ~~~~~~~~~~[0m
+        'rawRequest' is declared here.
+    [96msrc/onboarding/setup-tuition.integration.test.ts[0m:[93m46[0m:[93m36[0m - [91merror[0m[90m TS2740: [0mType '{ email: string; }' is missing the following properties from type 'DecodedIdToken': aud, auth_time, exp, firebase, and 4 more.
+
+    [7m46[0m           auth: { uid: "test_uid", token: { email: "test@example.com" } },
+    [7m  [0m [91m                                   ~~~~~[0m
+    [96msrc/onboarding/setup-tuition.integration.test.ts[0m:[93m54[0m:[93m34[0m - [91merror[0m[90m TS2740: [0mType '{ email: string; }' is missing the following properties from type 'DecodedIdToken': aud, auth_time, exp, firebase, and 4 more.
+
+    [7m54[0m         auth: { uid: "test_uid", token: { email: "test@example.com" } },
+    [7m  [0m [91m                                 ~~~~~[0m
+    [96msrc/onboarding/setup-tuition.integration.test.ts[0m:[93m79[0m:[93m36[0m - [91merror[0m[90m TS2740: [0mType '{ email: string; }' is missing the following properties from type 'DecodedIdToken': aud, auth_time, exp, firebase, and 4 more.
+
+    [7m79[0m         auth: { uid: "test_uid_1", token: { email: "test1@example.com" } },
+    [7m  [0m [91m                                   ~~~~~[0m
+    [96msrc/onboarding/setup-tuition.integration.test.ts[0m:[93m86[0m:[93m38[0m - [91merror[0m[90m TS2740: [0mType '{ email: string; }' is missing the following properties from type 'DecodedIdToken': aud, auth_time, exp, firebase, and 4 more.
+
+    [7m86[0m           auth: { uid: "test_uid_2", token: { email: "test2@example.com" } },
+    [7m  [0m [91m                                     ~~~~~[0m
+
+Test Suites: 2 failed, 2 passed, 4 total
+Tests:       15 passed, 15 total
+Snapshots:   0 total
+Time:        4.742 s, estimated 5 s
+Ran all test suites.

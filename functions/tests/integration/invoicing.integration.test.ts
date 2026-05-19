@@ -17,10 +17,10 @@
  *   - Run tests: FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 npm run test:backend
  */
 
-import { db } from "../admin";
-import { enrollSubjectHandler } from "../students/enroll-subject";
-import { deactivateSubjectHandler } from "../students/deactivate-subject";
-import { getKolkataBillingPeriod, getActiveEnrollments } from "./invoicing-utils";
+import { db } from "../../src/admin";
+import { enrollSubjectHandler } from "../../src/students/enroll-subject";
+import { deactivateSubjectHandler } from "../../src/students/deactivate-subject";
+import { getKolkataBillingPeriod, getActiveEnrollments } from "../../src/invoicing/invoicing-utils";
 import { 
   buildInvoicePayload, 
   sortInvoicesFIFO, 
@@ -28,7 +28,7 @@ import {
   nextBillingPeriod, 
   isStudentBillableForPeriod,
   fetchLatestBillingPeriod
-} from "./payment-helpers";
+} from "../../src/invoicing/payment-helpers";
 
 const isEmulatorRunning = process.env.FIRESTORE_EMULATOR_HOST !== undefined;
 
