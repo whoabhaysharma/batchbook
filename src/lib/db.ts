@@ -262,7 +262,7 @@ async function lazyGenerateCurrentInvoice(
 
     const today = new Date();
     const invoiceDate = new Date(today.getFullYear(), today.getMonth(), billingDay);
-    
+
     const activeEnrollments = enrollments.filter((e: any) =>
       isEnrollmentActive({
         status: e.status,

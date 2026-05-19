@@ -7,7 +7,8 @@ import {
   runTransaction,
   serverTimestamp
 } from "firebase/firestore";
-import { getFirebaseDb } from "./firebase";
+import { getFirebaseDb, getFirebaseFunctions } from "./firebase";
+import { httpsCallable } from "firebase/functions";
 
 /**
  * Suggests a 3-character uppercase abbreviation for a tuition name.
@@ -53,41 +54,16 @@ export async function setupTuition(
   tuitionName: string,
   tuitionCode: string
 ): Promise<void> {
-  const db = getFirebaseDb();
-  const normalizedCode = tuitionCode.toUpperCase();
+  const functions = getFirebaseFunctions();
+  const setupTuitionFn = httpsCallable<{
+    tuitionName: string;
+    tuitionCode: string;
+    userName: string;
+  }, { success: boolean; tuitionId: string }>(functions, "setupTuition");
 
-  const userRef = doc(db, "users", user.uid);
-  const tuitionCollection = collection(db, "tuitions");
-  const tuitionRef = doc(tuitionCollection); // Auto-generate ID
-  const tuitionId = tuitionRef.id;
-
-  await runTransaction(db, async (transaction) => {
-    // 1. Verify code uniqueness inside transaction
-    const q = query(tuitionCollection, where("code", "==", normalizedCode));
-    const codeSnapshot = await getDocs(q);
-
-    if (!codeSnapshot.empty) {
-      throw new Error("This tuition code is already taken globally.");
-    }
-
-    // 2. Create User Profile
-    transaction.set(userRef, {
-      uid: user.uid,
-      name: user.name || "Owner",
-      email: user.email,
-      role: "owner",
-      tuitionId,
-      createdAt: serverTimestamp(),
-    });
-
-    // 3. Create Tuition Center
-    transaction.set(tuitionRef, {
-      id: tuitionId,
-      name: tuitionName,
-      code: normalizedCode,
-      ownerId: user.uid,
-      currentStudentSequence: 0,
-      createdAt: serverTimestamp(),
-    });
+  await setupTuitionFn({
+    tuitionName,
+    tuitionCode,
+    userName: user.name,
   });
 }
